@@ -1,3 +1,4 @@
+# midiInput.py
 import mido
 
 def list_input_ports():
