@@ -1,125 +1,9 @@
-
-# import tkinter as tk
-# from tkinter import ttk
-# from tkinter import messagebox
-# import mido
-
-# class MidiMixerSelector(tk.Tk):
-#     def __init__(self):
-#         super().__init__()
-#         self.title("MIDI 믹서 설정")
-#         self.geometry("320x480")  # 드롭다운 2개 추가로 살짝 높이 확장
-#         self.resizable(False, False)
-        
-#         # 믹서 선택 라벨 및 드롭다운
-#         mixer_label = ttk.Label(self, text="믹서 선택:")
-#         mixer_label.pack(pady=(20, 5))
-
-#         self.mixer_var = tk.StringVar()
-#         mixer_dropdown = ttk.Combobox(self, textvariable=self.mixer_var, state="readonly")
-#         mixer_dropdown['values'] = ("Qu 5/6/7",)
-#         mixer_dropdown.current(0)
-#         mixer_dropdown.pack()
-
-#         # 입력 미디 라벨 및 드롭다운
-#         input_midi_label = ttk.Label(self, text="입력 미디:")
-#         input_midi_label.pack(pady=(15, 5))
-
-#         self.input_midi_var = tk.StringVar()
-#         self.input_midi_dropdown = ttk.Combobox(self, textvariable=self.input_midi_var, state="readonly")
-#         # MIDI 입력 포트 목록 가져오기
-#         input_ports = self.get_midi_input_ports()
-#         self.input_midi_dropdown['values'] = input_ports
-#         if input_ports:
-#             self.input_midi_var.set(input_ports[0])
-#         self.input_midi_dropdown.pack()
-
-#         # MIDI 채널 라벨 및 텍스트 박스
-#         channel_label = ttk.Label(self, text="MIDI 채널 번호 (1~16):")
-#         channel_label.pack(pady=(15, 5))
-
-#         self.channel_var = tk.StringVar(value="1")  # 기본값 1로 설정
-#         channel_entry = ttk.Entry(self, textvariable=self.channel_var, width=10)
-#         channel_entry.pack()
-
-#         # 출력 미디 라벨 및 드롭다운
-#         output_midi_label = ttk.Label(self, text="출력 미디:")
-#         output_midi_label.pack(pady=(15, 5))
-
-#         self.output_midi_var = tk.StringVar()
-#         self.output_midi_dropdown = ttk.Combobox(self, textvariable=self.output_midi_var, state="readonly")
-#         # MIDI 출력 포트 목록 가져오기
-#         output_ports = self.get_midi_output_ports()
-#         self.output_midi_dropdown['values'] = output_ports
-#         if output_ports:
-#             self.output_midi_var.set(output_ports[0])
-#         self.output_midi_dropdown.pack()
-
-#         # 새로고침 버튼
-#         refresh_btn = ttk.Button(self, text="포트 새로고침", command=self.refresh_ports)
-#         refresh_btn.pack(pady=(10, 5))
-
-#         # 확인 버튼
-#         confirm_btn = ttk.Button(self, text="연결", command=self.confirm)
-#         confirm_btn.pack(pady=5)
-
-#     def get_midi_input_ports(self):
-#         """사용 가능한 MIDI 입력 포트 목록 가져오기"""
-#         try:
-#             ports = mido.get_input_names()
-#             return ports if ports else ["사용 가능한 포트 없음"]
-#         except:
-#             return ["MIDI 포트 오류"]
-    
-#     def get_midi_output_ports(self):
-#         """사용 가능한 MIDI 출력 포트 목록 가져오기"""
-#         try:
-#             ports = mido.get_output_names()
-#             return ports if ports else ["사용 가능한 포트 없음"]
-#         except:
-#             return ["MIDI 포트 오류"]
-    
-#     def refresh_ports(self):
-#         """MIDI 포트 목록 새로고침"""
-#         # 입력 포트 업데이트
-#         input_ports = self.get_midi_input_ports()
-#         self.input_midi_dropdown['values'] = input_ports
-#         if input_ports and self.input_midi_var.get() not in input_ports:
-#             self.input_midi_var.set(input_ports[0])
-        
-#         # 출력 포트 업데이트
-#         output_ports = self.get_midi_output_ports()
-#         self.output_midi_dropdown['values'] = output_ports
-#         if output_ports and self.output_midi_var.get() not in output_ports:
-#             self.output_midi_var.set(output_ports[0])
-        
-#         messagebox.showinfo("새로고침 완료", "MIDI 포트 목록을 새로고침했습니다.")
-
-#     def confirm(self):
-#         mixer = self.mixer_var.get()
-#         input_midi = self.input_midi_var.get()
-#         channel = self.channel_var.get()
-#         output_midi = self.output_midi_var.get()
-
-#         if not channel.isdigit() or not (1 <= int(channel) <= 16):
-#             messagebox.showerror("입력 오류", "MIDI 채널 번호는 1에서 16 사이의 숫자여야 합니다.")
-#             return
-        
-#         messagebox.showinfo(
-#             "설정 완료", 
-#             f"믹서: {mixer}\n입력 미디: {input_midi}\nMIDI 채널: {channel}\n출력 미디: {output_midi}"
-#         )
-
-# if __name__ == "__main__":
-#     app = MidiMixerSelector()
-#     app.mainloop()
-
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 import mido
 import threading
-import time
+
 
 class MidiMixerSelector(tk.Tk):
     def __init__(self):
@@ -132,6 +16,7 @@ class MidiMixerSelector(tk.Tk):
         self.is_monitoring = False
         self.midi_thread = None # MIDI 수신을 담당할 스레드
         self.input_port = None  # 현재 열려있는 MIDI 입력 포트 객체
+        self.output_port = None # 현재 열려있는 MIDI 출력 포트 객체
         
         # --- GUI 위젯 생성 ---
         
@@ -203,6 +88,23 @@ class MidiMixerSelector(tk.Tk):
         # 앱 종료 시 스레드 정리 및 포트 닫기
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+    def open_output_port(self, port_name):
+        """지정된 이름의 MIDI 출력 포트를 연다. 기존 포트가 있으면 먼저 닫는다."""
+        if self.output_port:
+            self.close_output_port()
+        self.output_port = mido.open_output(port_name)
+        self.log_message(f"출력 포트 '{port_name}' 연결됨.")
+        return self.output_port
+
+    def close_output_port(self):
+        """열려있는 MIDI 출력 포트를 닫는다."""
+        if self.output_port:
+            try:
+                self.output_port.close()
+            except Exception:
+                pass
+            self.output_port = None
+
     def get_midi_input_ports(self):
         """사용 가능한 MIDI 입력 포트 목록 가져오기"""
         try:
@@ -259,15 +161,9 @@ class MidiMixerSelector(tk.Tk):
             for msg in self.input_port:
                 if not self.is_monitoring:
                     break
-                # 필터링 전: 받은 원본 메시지 로그 출력
-                self.after(0, self.log_message, f"【원본 메시지】 {msg}")
-
                 if msg.type == 'note_on':
-                    # 필터링 후: 채널 값에 따른 동작 분기 및 로그
-                    def process_and_log(message=msg):
-                        self.log_message(f"【처리 메시지】 channel={message.channel}, note={message.note}, velocity={message.velocity}")
-                        self.process_midi_message(message)
-                    self.after(0, process_and_log)
+                    # 수신 즉시 처리하여 출력 포트로 전송
+                    self.after(0, self.process_midi_message, msg)
         except Exception as e:
             self.after(0, self.log_message, f"MIDI 수신 오류: {e}")
         finally:
@@ -285,8 +181,6 @@ class MidiMixerSelector(tk.Tk):
         msg.channel == 1 : 씬 호출 처리
         """
 
-        self.log_message(f"process_midi_message 호출됨 - channel: {msg.channel}, note: {msg.note}, velocity: {msg.velocity}")
-        
         output_channel = int(self.channel_var.get()) - 1  # 0-based 채널 값 (Mido는 0-15)
 
         if msg.channel == 0:
@@ -318,39 +212,27 @@ class MidiMixerSelector(tk.Tk):
         # Mute Control Change (26), 값은 On/Off
         self.send_midi_cc(control=26, value=mute_on_off, channel=midi_channel)
 
-        self.log_message(f"[뮤트] 채널 {mute_param_num + 1} {'켜기' if mute_on_off else '끄기'} 명령 전송")
+        # 전송 완료
 
     def handle_scene_call(self, note, midi_channel):
         """
-        씬 호출용 Bank Change + Program Change 메시지 전송.
-
-        - 씬 번호: note 값 (1 이상 가정)
-        - 씬 번호 범위에 따라 bank 0,1,2 설정
-        - 프로그램 번호 = 씬번호 - bank 오프셋
+        씬 호출용 Bank Select(MSB=0, LSB=0) + Program Change 메시지 전송.
+        - 씬 번호: note=0 이 씬 1에 해당 → scene = note + 1
+        - Program Change 값 = scene - 1
         """
 
-        scene_number = note
-        if 1 <= scene_number <= 128:
-            bank = 0
-            program = scene_number - 1
-        elif 129 <= scene_number <= 256:
-            bank = 1
-            program = scene_number - 129
-        elif 257 <= scene_number <= 300:
-            bank = 2
-            program = scene_number - 257
-        else:
+        scene_number = note + 1
+        if not (1 <= scene_number <= 128):
             self.log_message(f"[씬 호출] 유효하지 않은 씬 번호: {scene_number}")
             return
 
-        # Bank Select MSB = 0 (일반적으로)
-        self.send_midi_cc(control=0, value=bank, channel=midi_channel)
-        # Bank Select LSB = 0
+        # Bank Select 고정: MSB=0, LSB=0
+        self.send_midi_cc(control=0, value=0, channel=midi_channel)
         self.send_midi_cc(control=32, value=0, channel=midi_channel)
         # Program Change
-        self.send_midi_pc(program=program, channel=midi_channel)
+        self.send_midi_pc(program=scene_number - 1, channel=midi_channel)
 
-        self.log_message(f"[씬 호출] 씬 {scene_number} 호출 (Bank:{bank}, 프로그램:{program})")
+        # 전송 완료
 
     def send_midi_cc(self, control, value, channel):
         if hasattr(self, 'output_port') and self.output_port:
@@ -378,10 +260,16 @@ class MidiMixerSelector(tk.Tk):
         else:
             # 새로 모니터링 시작
             input_midi_port = self.input_midi_var.get()
+            output_midi_port = self.output_midi_var.get()
             
             # 유효성 검사: 입력 포트
             if input_midi_port in ["사용 가능한 포트 없음", "MIDI 포트 오류"]:
                 messagebox.showerror("입력 오류", "유효한 MIDI 입력 포트를 선택해주세요.")
+                return
+
+            # 유효성 검사: 출력 포트
+            if output_midi_port in ["사용 가능한 포트 없음", "MIDI 포트 오류"]:
+                messagebox.showerror("입력 오류", "유효한 MIDI 출력 포트를 선택해주세요.")
                 return
 
             # 채널 번호 유효성 검사
@@ -402,14 +290,19 @@ class MidiMixerSelector(tk.Tk):
             self.connect_btn.config(text="중지") # 버튼 텍스트 변경
             self.log_message(f"MIDI 모니터링 시작: 입력 포트 '{input_midi_port}'")
 
-            # 출력 포트도 연결해야 할 경우 여기에 로직 추가 (현재는 입력만 구현)
-            # output_midi_port = self.output_midi_var.get()
-            # if output_midi_port not in ["사용 가능한 포트 없음", "MIDI 포트 오류"]:
-            #     try:
-            #         self.output_port = mido.open_output(output_midi_port)
-            #         self.log_message(f"출력 포트 '{output_midi_port}' 연결됨.")
-            #     except Exception as e:
-            #         self.log_message(f"출력 포트 '{output_midi_port}' 연결 실패: {e}")
+            # 출력 포트 연결
+            try:
+                self.open_output_port(output_midi_port)
+            except Exception as e:
+                self.log_message(f"출력 포트 '{output_midi_port}' 연결 실패: {e}")
+                self.stop_monitoring()
+                try:
+                    self.connect_btn.config(text="연결")
+                except Exception:
+                    pass
+                self.log_message("출력 포트 연결 실패로 인해 모니터링을 중지하고 버튼 상태를 복구했습니다.")
+                messagebox.showerror("연결 오류", f"출력 포트 연결 실패: {e}")
+                return
 
     def stop_monitoring(self):
         """MIDI 모니터링을 중지하고 리소스를 해제합니다."""
@@ -417,6 +310,7 @@ class MidiMixerSelector(tk.Tk):
         if self.input_port:
             self.input_port.close() # 포트를 닫아 MIDI 리스너 루프를 강제로 종료
             self.input_port = None
+        self.close_output_port()
         if self.midi_thread and self.midi_thread.is_alive():
             # 스레드가 종료될 때까지 잠시 대기 (daemon 스레드라 앱 종료 시 강제 종료됨)
             self.midi_thread.join(timeout=1.0) 
