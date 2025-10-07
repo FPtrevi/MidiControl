@@ -249,15 +249,25 @@ class MidiMixerSelector(tk.Tk):
         messagebox.showinfo("새로고침 완료", "MIDI 포트 목록을 새로고침했습니다.")
 
     def midi_listener(self, port_name):
-        """별도의 스레드에서 MIDI 메시지를 수신하는 함수"""
+        """
+        MIDI 포트에서 들어오는 모든 메시지를 로그에 기록하고,
+        필터링 후 동작 관련 로그도 출력합니다.
+        """
         try:
             self.input_port = mido.open_input(port_name)
-            self.log_message(f"'{port_name}' 포트에서 MIDI 메시지 수신 대기 중...")
+            self.after(0, self.log_message,f"'{port_name}' 포트에서 MIDI 수신 대기 중...")
             for msg in self.input_port:
-                if not self.is_monitoring: # 모니터링 중지 요청이 들어오면 루프 종료
+                if not self.is_monitoring:
                     break
-                # GUI 업데이트는 메인 스레드에서 해야 함 (Tkinter 규칙)
-                self.after(0, self.log_message, f"MIDI 수신됨: {msg}")
+                # 필터링 전: 받은 원본 메시지 로그 출력
+                self.after(0, self.log_message, f"【원본 메시지】 {msg}")
+
+                if msg.type == 'note_on':
+                    # 필터링 후: 채널 값에 따른 동작 분기 및 로그
+                    def process_and_log(message=msg):
+                        self.log_message(f"【처리 메시지】 channel={message.channel}, note={message.note}, velocity={message.velocity}")
+                        self.process_midi_message(message)
+                    self.after(0, process_and_log)
         except Exception as e:
             self.after(0, self.log_message, f"MIDI 수신 오류: {e}")
         finally:
@@ -265,8 +275,98 @@ class MidiMixerSelector(tk.Tk):
                 self.input_port.close()
                 self.input_port = None
             self.after(0, self.log_message, f"MIDI 리스너 스레드 종료: '{port_name}'")
-            self.is_monitoring = False # 오류 또는 종료 시 상태 업데이트
-            self.after(0, self.connect_btn.config, {"text": "연결"}) # 버튼 텍스트도 다시 "연결"로
+            self.is_monitoring = False
+            self.after(0, self.connect_btn.config, {"text": "연결"})
+
+    def process_midi_message(self, msg):
+        """
+        수신된 MIDI 메시지를 처리하는 함수.
+        msg.channel == 0 : 뮤트 처리
+        msg.channel == 1 : 씬 호출 처리
+        """
+
+        self.log_message(f"process_midi_message 호출됨 - channel: {msg.channel}, note: {msg.note}, velocity: {msg.velocity}")
+        
+        output_channel = int(self.channel_var.get()) - 1  # 0-based 채널 값 (Mido는 0-15)
+
+        if msg.channel == 0:
+            # 뮤트 명령 처리
+            self.handle_mute(msg.note, msg.velocity, output_channel)
+        elif msg.channel == 1:
+            # 씬 호출 처리
+            self.handle_scene_call(msg.note, output_channel)
+        else:
+            self.log_message(f"알 수 없는 채널 메시지 수신: {msg.channel}")
+
+    def handle_mute(self, note, velocity, midi_channel):
+        """
+        note 값에 따라 믹서 인풋 뮤트를 On/Off 제어합니다.
+        velocity >= 1 이면 Mute On, 0 이면 Mute Off로 간주.
+
+        뮤트 컨트롤 메시지:
+        - MSB = 63
+        - LSB = 62
+        - Control Change 번호 = 26
+        """
+        mute_on_off = 1 if velocity >= 1 else 0
+        mute_param_num = note  # note=0 → 채널 1, note=1 → 채널 2 와 매핑 가능
+
+        # Bank Select (MSB=63)
+        self.send_midi_cc(control=0, value=63, channel=midi_channel)
+        # Bank Select (LSB=62)
+        self.send_midi_cc(control=32, value=62, channel=midi_channel)
+        # Mute Control Change (26), 값은 On/Off
+        self.send_midi_cc(control=26, value=mute_on_off, channel=midi_channel)
+
+        self.log_message(f"[뮤트] 채널 {mute_param_num + 1} {'켜기' if mute_on_off else '끄기'} 명령 전송")
+
+    def handle_scene_call(self, note, midi_channel):
+        """
+        씬 호출용 Bank Change + Program Change 메시지 전송.
+
+        - 씬 번호: note 값 (1 이상 가정)
+        - 씬 번호 범위에 따라 bank 0,1,2 설정
+        - 프로그램 번호 = 씬번호 - bank 오프셋
+        """
+
+        scene_number = note
+        if 1 <= scene_number <= 128:
+            bank = 0
+            program = scene_number - 1
+        elif 129 <= scene_number <= 256:
+            bank = 1
+            program = scene_number - 129
+        elif 257 <= scene_number <= 300:
+            bank = 2
+            program = scene_number - 257
+        else:
+            self.log_message(f"[씬 호출] 유효하지 않은 씬 번호: {scene_number}")
+            return
+
+        # Bank Select MSB = 0 (일반적으로)
+        self.send_midi_cc(control=0, value=bank, channel=midi_channel)
+        # Bank Select LSB = 0
+        self.send_midi_cc(control=32, value=0, channel=midi_channel)
+        # Program Change
+        self.send_midi_pc(program=program, channel=midi_channel)
+
+        self.log_message(f"[씬 호출] 씬 {scene_number} 호출 (Bank:{bank}, 프로그램:{program})")
+
+    def send_midi_cc(self, control, value, channel):
+        if hasattr(self, 'output_port') and self.output_port:
+            try:
+                msg = mido.Message('control_change', channel=channel, control=control, value=value)
+                self.output_port.send(msg)
+            except Exception as e:
+                self.log_message(f"MIDI CC 전송 오류: {e}")
+
+    def send_midi_pc(self, program, channel):
+        if hasattr(self, 'output_port') and self.output_port:
+            try:
+                msg = mido.Message('program_change', channel=channel, program=program)
+                self.output_port.send(msg)
+            except Exception as e:
+                self.log_message(f"MIDI PC 전송 오류: {e}")
 
     def toggle_connection(self):
         """연결/중지 버튼 클릭 시 실행"""
