@@ -10,7 +10,7 @@ class MidiMixerSelector(tk.Tk):
         super().__init__()
         self.title("MIDI 믹서 설정")
         self.geometry("320x480") # 초기 크기를 좀 더 여유있게
-        self.resizable(False, False)
+        self.resizable(False, True)
         
         # MIDI 모니터링 상태 변수
         self.is_monitoring = False
@@ -161,8 +161,9 @@ class MidiMixerSelector(tk.Tk):
             for msg in self.input_port:
                 if not self.is_monitoring:
                     break
-                if msg.type == 'note_on':
-                    # 수신 즉시 처리하여 출력 포트로 전송
+                if msg.type in ('note_on', 'note_off'):
+                    # 입력 신호 로그 출력 후 즉시 처리
+                    self.after(0, self.log_message, f"[입력] {msg}")
                     self.after(0, self.process_midi_message, msg)
         except Exception as e:
             self.after(0, self.log_message, f"MIDI 수신 오류: {e}")
@@ -184,11 +185,13 @@ class MidiMixerSelector(tk.Tk):
         output_channel = int(self.channel_var.get()) - 1  # 0-based 채널 값 (Mido는 0-15)
 
         if msg.channel == 0:
-            # 뮤트 명령 처리
-            self.handle_mute(msg.note, msg.velocity, output_channel)
+            # 뮤트 명령 처리: note_off는 항상 해제(velocity=0)로 간주
+            effective_velocity = msg.velocity if msg.type == 'note_on' else 0
+            self.handle_mute(msg.note, effective_velocity, output_channel)
         elif msg.channel == 1:
-            # 씬 호출 처리
-            self.handle_scene_call(msg.note, output_channel)
+            # 씬 호출 처리: note_on && velocity>0 에서만 동작
+            if msg.type == 'note_on' and msg.velocity > 0:
+                self.handle_scene_call(msg.note, output_channel)
         else:
             self.log_message(f"알 수 없는 채널 메시지 수신: {msg.channel}")
 
@@ -196,22 +199,17 @@ class MidiMixerSelector(tk.Tk):
         """
         note 값에 따라 믹서 인풋 뮤트를 On/Off 제어합니다.
         velocity >= 1 이면 Mute On, 0 이면 Mute Off로 간주.
-
-        뮤트 컨트롤 메시지:
-        - MSB = 63
-        - LSB = 62
-        - Control Change 번호 = 26
+        Qu 프로토콜 기준 NRPN 시퀀스로 전송합니다.
+        - CC#99 (NRPN MSB) = MB
+        - CC#98 (NRPN LSB) = LB
+        - CC#6  (Data Entry MSB) = 0
+        - CC#38 (Data Entry LSB) = 1(켜기) / 0(끄기)
         """
         mute_on_off = 1 if velocity >= 1 else 0
-        mute_param_num = note  # note=0 → 채널 1, note=1 → 채널 2 와 매핑 가능
-
-        # Bank Select (MSB=63)
-        self.send_midi_cc(control=0, value=63, channel=midi_channel)
-        # Bank Select (LSB=62)
-        self.send_midi_cc(control=32, value=62, channel=midi_channel)
-        # Mute Control Change (26), 값은 On/Off
-        self.send_midi_cc(control=26, value=mute_on_off, channel=midi_channel)
-
+        # IpN Mute의 NRPN 주소: MB=0x00, LB=N-1(여기서는 note가 0-based 채널 인덱스로 들어온다고 가정)
+        parameter_msb = 0x00
+        parameter_lsb = int(note) & 0x7F
+        self.send_midi_nrpn(parameter_msb, parameter_lsb, mute_on_off, midi_channel)
         # 전송 완료
 
     def handle_scene_call(self, note, midi_channel):
@@ -234,10 +232,21 @@ class MidiMixerSelector(tk.Tk):
 
         # 전송 완료
 
+    def send_midi_nrpn(self, parameter_msb, parameter_lsb, value_lsb, channel):
+        """Qu NRPN 전송: CC99(MSB), CC98(LSB), CC6(0), CC38(value)."""
+        # NRPN 주소 지정
+        self.send_midi_cc(control=99, value=parameter_msb & 0x7F, channel=channel)  # CC#99 NRPN MSB
+        self.send_midi_cc(control=98, value=parameter_lsb & 0x7F, channel=channel)  # CC#98 NRPN LSB
+        # 데이터 엔트리
+        self.send_midi_cc(control=6, value=0, channel=channel)                       # CC#6  Data Entry MSB
+        self.send_midi_cc(control=38, value=value_lsb & 0x7F, channel=channel)       # CC#38 Data Entry LSB
+
     def send_midi_cc(self, control, value, channel):
         if hasattr(self, 'output_port') and self.output_port:
             try:
                 msg = mido.Message('control_change', channel=channel, control=control, value=value)
+                # 출력 신호 로그
+                self.log_message(f"[출력 CC] ch={channel} ctl={control} val={value}")
                 self.output_port.send(msg)
             except Exception as e:
                 self.log_message(f"MIDI CC 전송 오류: {e}")
@@ -246,6 +255,8 @@ class MidiMixerSelector(tk.Tk):
         if hasattr(self, 'output_port') and self.output_port:
             try:
                 msg = mido.Message('program_change', channel=channel, program=program)
+                # 출력 신호 로그
+                self.log_message(f"[출력 PC] ch={channel} program={program}")
                 self.output_port.send(msg)
             except Exception as e:
                 self.log_message(f"MIDI PC 전송 오류: {e}")
