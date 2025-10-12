@@ -196,41 +196,54 @@ class MidiMixerSelector(tk.Tk):
             self.log_message(f"알 수 없는 채널 메시지 수신: {msg.channel}")
 
     def handle_mute(self, note, velocity, midi_channel):
+        """믹서 종류에 따라 적절한 뮤트 프로세싱을 수행합니다."""
+        mixer = self.mixer_var.get()
+        
+        if mixer == "Qu 5/6/7":
+            self.handle_mute_qu_nrpn(note, velocity, midi_channel)
+        # TODO: 다른 믹서 추가 시 여기에 elif 추가
+        else:
+            self.log_message(f"[뮤트] 지원하지 않는 믹서: {mixer}")
+
+    def handle_mute_qu_nrpn(self, note, velocity, midi_channel):
         """
-        note 값에 따라 믹서 인풋 뮤트를 On/Off 제어합니다.
-        velocity >= 1 이면 Mute On, 0 이면 Mute Off로 간주.
-        Qu 프로토콜 기준 NRPN 시퀀스로 전송합니다.
+        Qu 5/6/7 NRPN 방식 뮤트 제어.
         - CC#99 (NRPN MSB) = MB
         - CC#98 (NRPN LSB) = LB
         - CC#6  (Data Entry MSB) = 0
         - CC#38 (Data Entry LSB) = 1(켜기) / 0(끄기)
         """
         mute_on_off = 1 if velocity >= 1 else 0
-        # IpN Mute의 NRPN 주소: MB=0x00, LB=N-1(여기서는 note가 0-based 채널 인덱스로 들어온다고 가정)
         parameter_msb = 0x00
         parameter_lsb = int(note) & 0x7F
         self.send_midi_nrpn(parameter_msb, parameter_lsb, mute_on_off, midi_channel)
-        # 전송 완료
 
     def handle_scene_call(self, note, midi_channel):
+        """믹서 종류에 따라 적절한 씬 호출 프로세싱을 수행합니다."""
+        mixer = self.mixer_var.get()
+        
+        if mixer == "Qu 5/6/7":
+            self.handle_scene_call_qu_bank(note, midi_channel)
+        # TODO: 다른 믹서 추가 시 여기에 elif 추가
+        else:
+            self.log_message(f"[씬 호출] 지원하지 않는 믹서: {mixer}")
+
+    def handle_scene_call_qu_bank(self, note, midi_channel):
         """
-        씬 호출용 Bank Select(MSB=0, LSB=0) + Program Change 메시지 전송.
+        Qu 5/6/7 Bank Select + Program Change 방식.
         - 씬 번호: note=0 이 씬 1에 해당 → scene = note + 1
         - Program Change 값 = scene - 1
         """
-
         scene_number = note + 1
         if not (1 <= scene_number <= 128):
             self.log_message(f"[씬 호출] 유효하지 않은 씬 번호: {scene_number}")
             return
 
-        # Bank Select 고정: MSB=0, LSB=0
+        # Bank Select: MSB=0, LSB=0
         self.send_midi_cc(control=0, value=0, channel=midi_channel)
         self.send_midi_cc(control=32, value=0, channel=midi_channel)
         # Program Change
         self.send_midi_pc(program=scene_number - 1, channel=midi_channel)
-
-        # 전송 완료
 
     def send_midi_nrpn(self, parameter_msb, parameter_lsb, value_lsb, channel):
         """Qu NRPN 전송: CC99(MSB), CC98(LSB), CC6(0), CC38(value)."""
