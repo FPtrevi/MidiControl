@@ -210,6 +210,36 @@ class MidiBackend:
             self.logger.error(f"PC 전송 오류: {e}")
             return False
     
+    def send_note_on(self, note: int, velocity: int, channel: int) -> bool:
+        """Send Note On message thread-safely."""
+        if not self.output_port:
+            self.logger.error("출력 포트가 연결되지 않았습니다")
+            return False
+        
+        try:
+            msg = mido.Message('note_on', channel=channel, note=note, velocity=velocity)
+            self.output_port.send(msg)
+            self.logger.debug(f"Note On 전송: ch={channel} note={note} vel={velocity}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Note On 전송 오류: {e}")
+            return False
+    
+    def send_note_off(self, note: int, velocity: int, channel: int) -> bool:
+        """Send Note Off message thread-safely."""
+        if not self.output_port:
+            self.logger.error("출력 포트가 연결되지 않았습니다")
+            return False
+        
+        try:
+            msg = mido.Message('note_off', channel=channel, note=note, velocity=velocity)
+            self.output_port.send(msg)
+            self.logger.debug(f"Note Off 전송: ch={channel} note={note} vel={velocity}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Note Off 전송 오류: {e}")
+            return False
+    
     def shutdown(self) -> None:
         """Complete shutdown of MIDI backend."""
         self.stop_monitoring()

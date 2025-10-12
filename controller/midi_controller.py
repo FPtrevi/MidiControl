@@ -10,6 +10,7 @@ import mido
 from model.midi_backend import MidiBackend
 from model.mute_service import MuteService
 from model.scene_service import SceneService
+from model.softkey_service import SoftKeyService
 from view.midi_view import MidiMixerView
 from config.settings import NOTE_ON_TYPE, NOTE_OFF_TYPE
 from utils.logger import get_logger
@@ -31,6 +32,7 @@ class MidiController:
         # Services (initialized after mixer selection)
         self.mute_service: Optional[MuteService] = None
         self.scene_service: Optional[SceneService] = None
+        self.softkey_service: Optional[SoftKeyService] = None
         
         # Connection state
         self.is_monitoring = False
@@ -63,7 +65,7 @@ class MidiController:
             channel = params["channel"]
             
             # Initialize services if not done
-            if not self.mute_service or not self.scene_service:
+            if not self.mute_service or not self.scene_service or not self.softkey_service:
                 self._initialize_services(mixer)
             
             # Open MIDI ports
@@ -130,16 +132,19 @@ class MidiController:
                 self.mute_service.update_mixer_config(mixer_name)
             if self.scene_service:
                 self.scene_service.update_mixer_config(mixer_name)
+            if self.softkey_service:
+                self.softkey_service.update_mixer_config(mixer_name)
                 
         except Exception as e:
             self.logger.error(f"믹서 변경 오류: {e}")
             self.view.show_message("오류", f"믹서 설정 변경 중 오류가 발생했습니다: {e}", "error")
     
     def _initialize_services(self, mixer_name: str) -> None:
-        """Initialize mute and scene services for selected mixer."""
+        """Initialize mute, scene, and softkey services for selected mixer."""
         try:
             self.mute_service = MuteService(mixer_name, self.midi_backend)
             self.scene_service = SceneService(mixer_name, self.midi_backend)
+            self.softkey_service = SoftKeyService(mixer_name, self.midi_backend)
             self.logger.info(f"서비스 초기화 완료: {mixer_name}")
             
         except Exception as e:
@@ -160,18 +165,24 @@ class MidiController:
             params = self.view.get_connection_params()
             output_channel = params["channel"] - 1
             
-            # Route message based on channel
+            # Route message based on channel (new mapping)
             if message.channel == 0:
-                # Mute control
+                # Soft key control (was mute)
                 effective_velocity = message.velocity if message.type == NOTE_ON_TYPE else 0
-                if self.mute_service:
-                    self.mute_service.handle_mute(message.note, effective_velocity, output_channel)
+                if self.softkey_service:
+                    self.softkey_service.handle_softkey(message.note, effective_velocity, output_channel)
                     
             elif message.channel == 1:
-                # Scene call (only on note_on with velocity > 0)
+                # Scene call (unchanged)
                 if message.type == NOTE_ON_TYPE and message.velocity > 0:
                     if self.scene_service:
                         self.scene_service.handle_scene(message.note, output_channel)
+                        
+            elif message.channel == 2:
+                # Mute control (was channel 0)
+                effective_velocity = message.velocity if message.type == NOTE_ON_TYPE else 0
+                if self.mute_service:
+                    self.mute_service.handle_mute(message.note, effective_velocity, output_channel)
             else:
                 self.view.append_log(f"알 수 없는 채널 메시지 수신: {message.channel}")
                 

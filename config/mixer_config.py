@@ -9,9 +9,18 @@ MIXER_CONFIGS: Dict[str, Dict[str, Any]] = {
     "Qu 5/6/7": {
         "mute_protocol": "nrpn",
         "scene_protocol": "bank_select",
+        "softkey_protocol": "cc",  # Using Note On/Off messages
         "nrpn_params": {
             "msb": 0x00,
             "mute_sequence": [99, 98, 6, 38]  # CC sequence for NRPN mute
+        },
+        "softkey_cc_params": {
+            "base_note": 48,  # Note 48-59 (0x30-0x3B) for soft keys 1-12
+            "max_keys": 12
+        },
+        "softkey_nrpn_params": {
+            "msb": 0x01,  # Soft key parameter group (alternative protocol)
+            "sequence": [99, 98, 6, 38]
         },
         "bank_select": {
             "msb": 0,
