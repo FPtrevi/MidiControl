@@ -15,6 +15,7 @@ from model.softkey_service import SoftKeyService
 from view.midi_view import MidiMixerView
 from config.settings import NOTE_ON_TYPE, NOTE_OFF_TYPE, PORT_WATCH_INTERVAL_SEC
 from utils.logger import get_logger
+from utils.prefs import load_prefs, save_prefs
 
 
 class MidiController:
@@ -216,6 +217,56 @@ class MidiController:
         try:
             self.logger.info("컨트롤러 초기화 시작")
             
+            # 1) 저장된 설정 로드하여 View에 적용 (가능한 경우)
+            try:
+                prefs = load_prefs()
+                mixer = prefs.get("mixer")
+                input_port = prefs.get("input_port")
+                output_port = prefs.get("output_port")
+                channel = prefs.get("channel")
+
+                # Mixer 우선 적용
+                if isinstance(mixer, str) and mixer:
+                    self.view.mixer_var.set(mixer)
+                    # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
+                    try:
+                        self._on_mixer_changed(mixer)
+                    except Exception:
+                        pass
+
+                # 채널 적용 (유효 범위 체크는 view 검증에 맡김)
+                if isinstance(channel, int) and channel:
+                    self.view.channel_var.set(str(channel))
+
+                # 포트 목록을 먼저 스캔한 뒤, 해당 값이 목록에 없으면 첫 번째 항목으로 fallback
+                def _apply_ports_when_ready():
+                    try:
+                        inputs = self.midi_backend.get_input_ports()
+                        outputs = self.midi_backend.get_output_ports()
+                        self.view.update_input_ports(inputs)
+                        self.view.update_output_ports(outputs)
+
+                        # 입력 포트 복원 또는 첫 항목
+                        if isinstance(input_port, str) and input_port in inputs:
+                            self.view.input_midi_var.set(input_port)
+                        else:
+                            # update_input_ports에서 이미 첫 항목으로 fallback하므로 별도 처리 불필요
+                            pass
+
+                        # 출력 포트 복원 또는 첫 항목
+                        if isinstance(output_port, str) and output_port in outputs:
+                            self.view.output_midi_var.set(output_port)
+                        else:
+                            # 요구사항: 저장된 출력 포트가 없으면 첫번째 목록 값이 선택되도록 유지
+                            pass
+                    except Exception as e:
+                        self.logger.error(f"초기 포트 적용 오류: {e}")
+
+                # Tk 스레드에서 안전하게 적용
+                self.view.root.after(0, _apply_ports_when_ready)
+            except Exception as e:
+                self.logger.warning(f"환경설정 로드 중 경고: {e}")
+
             # Initial port refresh must run on Tk main loop to avoid GIL issues
             try:
                 self.view.root.after(0, self._on_refresh_ports)
@@ -241,6 +292,23 @@ class MidiController:
             if self.is_monitoring:
                 self._on_disconnect()
             
+            # 현재 설정 저장
+            try:
+                params = self.view.get_connection_params()
+                # channel은 int, 나머지는 str
+                prefs = {
+                    "mixer": params.get("mixer"),
+                    "input_port": params.get("input_port"),
+                    "output_port": params.get("output_port"),
+                    "channel": params.get("channel"),
+                }
+                if not save_prefs(prefs):
+                    self.logger.warning("환경설정 저장 실패")
+                else:
+                    self.logger.info("환경설정 저장 완료")
+            except Exception as e:
+                self.logger.warning(f"환경설정 저장 중 경고: {e}")
+
             if self.mute_service:
                 self.mute_service.shutdown()
             if self.scene_service:

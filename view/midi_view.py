@@ -232,6 +232,8 @@ class MidiMixerView:
                 # set to first valid option, or empty if placeholder
                 self.output_midi_var.set(clean_ports[0] if clean_ports[0] != "사용 가능한 포트 없음" else "")
 
+            # 요구사항: 저장된 값이 목록에 없으면 첫 번째 값이 선택된 상태 유지
+
         if threading.current_thread() == threading.main_thread():
             _apply()
         else:
