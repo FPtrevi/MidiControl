@@ -75,6 +75,24 @@ MControl/
 - **Qu 5/6/7 씬**: Bank Select + Program Change (CC0→CC32→PC)
 - **Qu 5/6/7 뮤트**: NRPN 시퀀스 (CC99→CC98→CC6→CC38)
 
+## 배포
+
+### macOS 앱으로 빌드
+
+이 애플리케이션을 독립 실행형 macOS .app 파일로 배포할 수 있습니다.
+
+#### 빠른 빌드
+```bash
+./build_app.sh
+```
+
+#### DMG 설치 파일 생성
+```bash
+./create_dmg.sh
+```
+
+자세한 내용은 [DISTRIBUTION.md](DISTRIBUTION.md)를 참조하세요.
+
 ## 개발
 
 ### 새 믹서 추가
