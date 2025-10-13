@@ -44,13 +44,19 @@ echo -e "${GREEN}✓ 정리 완료${NC}"
 
 # 5. 앱 빌드
 echo -e "${YELLOW}[5/7] 앱 빌드 중...${NC}"
-python3 setup.py py2app
+python3 setup.py py2app --optimize=2
 
 if [ ! -d "dist/MIDI Mixer Control.app" ]; then
     echo -e "${RED}✗ 빌드 실패!${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ 빌드 완료${NC}"
+
+# 5.5. 앱 권한 설정
+echo -e "${YELLOW}[5.5/7] 앱 권한 설정...${NC}"
+chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/MIDI Mixer Control"
+chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/python"
+echo -e "${GREEN}✓ 권한 설정 완료${NC}"
 
 # 6. 앱 크기 확인
 echo -e "${YELLOW}[6/7] 빌드된 앱 정보...${NC}"

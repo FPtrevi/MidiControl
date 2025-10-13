@@ -97,7 +97,7 @@ class MidiMixerApp:
 
 def main():
     """Main entry point."""
-    print("MIDI Mixer Control v1.0")
+    print("MIDI Mixer Control v1.0.1")
     print("=" * 50)
     
     # Check Python version
@@ -109,14 +109,32 @@ def main():
     try:
         import mido
         import tkinter
+        import threading
+        import json
     except ImportError as e:
         print(f"오류: 필요한 패키지가 설치되지 않았습니다: {e}")
         print("다음 명령으로 설치하세요: pip install mido")
         return 1
     
+    # Set up error handling
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        
+        print(f"치명적 오류 발생: {exc_type.__name__}: {exc_value}")
+        import traceback
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+    
+    sys.excepthook = handle_exception
+    
     # Create and run application
-    app = MidiMixerApp()
-    return app.run()
+    try:
+        app = MidiMixerApp()
+        return app.run()
+    except Exception as e:
+        print(f"애플리케이션 시작 오류: {e}")
+        return 1
 
 
 if __name__ == "__main__":
