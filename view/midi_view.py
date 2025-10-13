@@ -90,9 +90,6 @@ class MidiMixerView:
         button_frame = ttk.Frame(self.root)
         button_frame.pack(pady=(20, 10))
         
-        self.refresh_btn = ttk.Button(button_frame, text="포트 새로고침", command=self._on_refresh_ports)
-        self.refresh_btn.pack(side="left", padx=(0, 10))
-        
         self.connect_btn = ttk.Button(button_frame, text="연결", command=self._on_connect_toggle)
         self.connect_btn.pack(side="left")
         
@@ -142,9 +139,8 @@ class MidiMixerView:
             self.on_disconnect_callback()
     
     def _on_refresh_ports(self) -> None:
-        """Handle port refresh request."""
-        if self.on_refresh_ports_callback:
-            self.on_refresh_ports_callback()
+        """Deprecated: no-op (refresh is automatic)."""
+        return
     
     def _validate_connection_params(self) -> bool:
         """Validate connection parameters."""
@@ -188,8 +184,8 @@ class MidiMixerView:
         self.on_disconnect_callback = callback
     
     def set_refresh_ports_callback(self, callback: Callable) -> None:
-        """Set refresh ports callback function."""
-        self.on_refresh_ports_callback = callback
+        """Deprecated: refresh is automatic; keep for compatibility."""
+        self.on_refresh_ports_callback = None
     
     def set_mixer_changed_callback(self, callback: Callable) -> None:
         """Set mixer changed callback function."""
@@ -201,21 +197,50 @@ class MidiMixerView:
     
     def update_input_ports(self, ports: List[str]) -> None:
         """Update input port dropdown options."""
-        self.input_midi_dropdown['values'] = ports
-        if ports and self.input_midi_var.get() not in ports:
-            self.input_midi_var.set(ports[0] if ports[0] != "사용 가능한 포트 없음" else "")
+        def _apply():
+            # sanitize ports list: remove falsy/None and dedupe
+            clean_ports = [p for p in ports if p]
+            # fallback when empty
+            if not clean_ports:
+                clean_ports = ["사용 가능한 포트 없음"]
+
+            self.input_midi_dropdown['values'] = clean_ports
+
+            current = self.input_midi_var.get()
+            if current not in clean_ports:
+                # set to first valid option, or empty if placeholder
+                self.input_midi_var.set(clean_ports[0] if clean_ports[0] != "사용 가능한 포트 없음" else "")
+
+        if threading.current_thread() == threading.main_thread():
+            _apply()
+        else:
+            self.root.after(0, _apply)
     
     def update_output_ports(self, ports: List[str]) -> None:
         """Update output port dropdown options."""
-        self.output_midi_dropdown['values'] = ports
-        if ports and self.output_midi_var.get() not in ports:
-            self.output_midi_var.set(ports[0] if ports[0] != "사용 가능한 포트 없음" else "")
+        def _apply():
+            # sanitize ports list: remove falsy/None and dedupe
+            clean_ports = [p for p in ports if p]
+            # fallback when empty
+            if not clean_ports:
+                clean_ports = ["사용 가능한 포트 없음"]
+
+            self.output_midi_dropdown['values'] = clean_ports
+
+            current = self.output_midi_var.get()
+            if current not in clean_ports:
+                # set to first valid option, or empty if placeholder
+                self.output_midi_var.set(clean_ports[0] if clean_ports[0] != "사용 가능한 포트 없음" else "")
+
+        if threading.current_thread() == threading.main_thread():
+            _apply()
+        else:
+            self.root.after(0, _apply)
     
     def set_connection_state(self, connected: bool) -> None:
         """Update connection state and button text."""
         self.is_connected = connected
         self.connect_btn.config(text="중지" if connected else "연결")
-        self.refresh_btn.config(state="disabled" if connected else "normal")
     
     def clear_log(self) -> None:
         """Clear the log text area."""

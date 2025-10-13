@@ -20,6 +20,7 @@ LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 # Threading
 MIDI_THREAD_DAEMON = True
 MIDI_THREAD_TIMEOUT = 1.0
+PORT_WATCH_INTERVAL_SEC = float(os.getenv("PORT_WATCH_INTERVAL_SEC", "1.0"))
 
 # MIDI Message Types
 NOTE_ON_TYPE = "note_on"

@@ -43,16 +43,9 @@ class MidiMixerApp:
     def run(self):
         """Run the application."""
         try:
-            # Initialize controller
+            # Initialize controller on main thread to keep mido calls GIL-safe
             self.controller = MidiController()
-            
-            # Start controller in separate thread to avoid blocking
-            controller_thread = threading.Thread(
-                target=self._run_controller,
-                daemon=True,
-                name="MidiController"
-            )
-            controller_thread.start()
+            self.controller.initialize()
             
             # Main update loop
             self._main_loop()
@@ -64,9 +57,8 @@ class MidiMixerApp:
         return 0
     
     def _run_controller(self):
-        """Run controller in separate thread."""
+        """Deprecated: controller runs on main thread now."""
         try:
-            # Controller는 GUI를 실행하지 않고 초기화만
             self.controller.initialize()
         except Exception as e:
             self.logger.error(f"컨트롤러 초기화 오류: {e}")

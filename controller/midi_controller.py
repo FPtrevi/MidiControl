@@ -5,6 +5,7 @@ Implements MVC pattern with thread-safe communication.
 """
 import threading
 from typing import Optional, Dict, Any
+import time
 import mido
 
 from model.midi_backend import MidiBackend
@@ -12,7 +13,7 @@ from model.mute_service import MuteService
 from model.scene_service import SceneService
 from model.softkey_service import SoftKeyService
 from view.midi_view import MidiMixerView
-from config.settings import NOTE_ON_TYPE, NOTE_OFF_TYPE
+from config.settings import NOTE_ON_TYPE, NOTE_OFF_TYPE, PORT_WATCH_INTERVAL_SEC
 from utils.logger import get_logger
 
 
@@ -36,6 +37,14 @@ class MidiController:
         
         # Connection state
         self.is_monitoring = False
+        # Port change detection state
+        self._last_input_ports: Optional[list[str]] = None
+        self._last_output_ports: Optional[list[str]] = None
+        self._last_port_scan_time: float = 0.0
+        self._port_scan_interval_sec: float = PORT_WATCH_INTERVAL_SEC
+        # Background watcher
+        self._port_watcher_thread: Optional[threading.Thread] = None
+        self._port_watcher_stop = threading.Event()
         
         # Set up callbacks
         self._setup_callbacks()
@@ -103,24 +112,28 @@ class MidiController:
             self.logger.error(f"연결 해제 오류: {e}")
     
     def _on_refresh_ports(self) -> None:
-        """Handle port refresh request from view."""
-        try:
-            if self.is_monitoring:
-                self._on_disconnect()
-            
-            # Get fresh port lists
-            input_ports = self.midi_backend.get_input_ports()
-            output_ports = self.midi_backend.get_output_ports()
-            
-            # Update view
-            self.view.update_input_ports(input_ports)
-            self.view.update_output_ports(output_ports)
-            
-            self.view.show_message("새로고침 완료", "MIDI 포트 목록을 새로고침했습니다.")
-            
-        except Exception as e:
-            self.logger.error(f"포트 새로고침 오류: {e}")
-            self.view.show_message("오류", f"포트 새로고침 중 오류가 발생했습니다: {e}", "error")
+        """Handle port refresh request from view. Run scan off the Tk thread."""
+        def _scan_and_update():
+            try:
+                if self.is_monitoring:
+                    # ensure disconnect happens on Tk thread
+                    self.view.root.after(0, self._on_disconnect)
+
+                input_ports = self.midi_backend.get_input_ports()
+                output_ports = self.midi_backend.get_output_ports()
+
+                def _apply():
+                    self.view.update_input_ports(input_ports)
+                    self.view.update_output_ports(output_ports)
+                self.view.root.after(0, _apply)
+
+                # Save last lists
+                self._last_input_ports = input_ports
+                self._last_output_ports = output_ports
+            except Exception as e:
+                self.logger.error(f"포트 새로고침 오류: {e}")
+
+        threading.Thread(target=_scan_and_update, daemon=True, name="PortRefresh").start()
     
     def _on_mixer_changed(self, mixer_name: str) -> None:
         """Handle mixer selection change from view."""
@@ -195,15 +208,25 @@ class MidiController:
         if self.is_monitoring:
             # Process queued MIDI messages
             self.midi_backend.process_queued_messages()
+            return
+        # Port polling moved to background watcher thread
     
     def initialize(self) -> None:
         """Initialize the controller (without starting GUI main loop)."""
         try:
             self.logger.info("컨트롤러 초기화 시작")
             
-            # Initial port refresh
-            self._on_refresh_ports()
+            # Initial port refresh must run on Tk main loop to avoid GIL issues
+            try:
+                self.view.root.after(0, self._on_refresh_ports)
+            except Exception as e:
+                # Fallback if root is not ready (should not happen)
+                self.logger.warning(f"초기 새로고침 스케줄 실패, 즉시 시도: {e}")
+                self._on_refresh_ports()
             
+            # Start background port watcher
+            self._start_port_watcher()
+
             self.logger.info("컨트롤러 초기화 완료")
             
         except Exception as e:
@@ -213,6 +236,8 @@ class MidiController:
     def shutdown(self) -> None:
         """Shutdown the application."""
         try:
+            # stop watcher first
+            self._stop_port_watcher()
             if self.is_monitoring:
                 self._on_disconnect()
             
@@ -228,3 +253,39 @@ class MidiController:
             
         except Exception as e:
             self.logger.error(f"종료 중 오류: {e}")
+
+    def _start_port_watcher(self) -> None:
+        if self._port_watcher_thread and self._port_watcher_thread.is_alive():
+            return
+        self._port_watcher_stop.clear()
+
+        def _watch():
+            while not self._port_watcher_stop.is_set():
+                try:
+                    current_inputs = self.midi_backend.get_input_ports()
+                    current_outputs = self.midi_backend.get_output_ports()
+
+                    changed = False
+                    if self._last_input_ports is None or self._last_input_ports != current_inputs:
+                        self._last_input_ports = current_inputs
+                        changed = True
+                        self.view.root.after(0, lambda: self.view.update_input_ports(current_inputs))
+
+                    if self._last_output_ports is None or self._last_output_ports != current_outputs:
+                        self._last_output_ports = current_outputs
+                        changed = True
+                        self.view.root.after(0, lambda: self.view.update_output_ports(current_outputs))
+
+                    # throttle
+                    time.sleep(self._port_scan_interval_sec)
+                except Exception as e:
+                    self.logger.error(f"포트 감시 오류: {e}")
+                    time.sleep(self._port_scan_interval_sec)
+
+        self._port_watcher_thread = threading.Thread(target=_watch, daemon=True, name="PortWatcher")
+        self._port_watcher_thread.start()
+
+    def _stop_port_watcher(self) -> None:
+        self._port_watcher_stop.set()
+        if self._port_watcher_thread and self._port_watcher_thread.is_alive():
+            self._port_watcher_thread.join(timeout=2.0)
