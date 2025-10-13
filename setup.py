@@ -19,8 +19,6 @@ OPTIONS = {
         'matplotlib', 'numpy', 'scipy', 'pandas',
         'PIL', 'PIL.Image', 'PIL.ImageTk',  # 이미지 라이브러리 제외
         'test', 'tests', 'unittest',  # 테스트 모듈 제외
-        'distutils', 'setuptools',  # 빌드 도구 제외
-        'email', 'http', 'urllib',  # 네트워크 관련 제외 (필요시 추가)
     ],
     'plist': {
         'CFBundleName': 'MIDI Mixer Control',
