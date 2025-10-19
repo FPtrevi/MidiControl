@@ -4,7 +4,7 @@ Supports both DM3 (OSC) and Qu-5 (MIDI) mixers through virtual MIDI ports.
 """
 import mido
 import threading
-from typing import Optional, List, Callable, Any
+from typing import Optional, List, Callable, Any, Union
 from queue import Queue, Empty
 import time
 
@@ -42,18 +42,20 @@ class MidiBackend:
         self.virtual_port_active = False
         
         # Thread-safe communication
-        self._message_queue = Queue()
-        self._control_queue = Queue()
+        self._message_queue: Queue[mido.Message] = Queue()
+        self._control_queue: Queue[Any] = Queue()
         self._shutdown_event = threading.Event()
-        self._thread_lock = threading.Lock()
+        self._thread_lock = threading.RLock()  # Use RLock for better thread safety
         self._midi_thread: Optional[threading.Thread] = None
         
         # Callback handlers
-        self._message_handler: Optional[Callable] = None
+        self._message_handler: Optional[Callable[[mido.Message], None]] = None
+        self._initialized = False
     
-    def set_message_handler(self, handler: Callable[[Any], None]) -> None:
+    def set_message_handler(self, handler: Callable[[mido.Message], None]) -> None:
         """Set the message handler callback (called from main thread)."""
-        self._message_handler = handler
+        with self._thread_lock:
+            self._message_handler = handler
     
     def get_input_ports(self) -> List[str]:
         """Get available MIDI input ports (virtual port only)."""
@@ -81,56 +83,65 @@ class MidiBackend:
     
     def create_virtual_ports(self) -> bool:
         """Create virtual MIDI ports in a separate thread to avoid GIL issues."""
-        if not RTMIDI_AVAILABLE:
-            self.logger.warning("rtmidi가 사용할 수 없어 가상 포트를 시뮬레이션 모드로 실행합니다.")
-            self.virtual_port_active = True  # Simulate active state
-            return True
-        
-        try:
-            # Clean up existing ports first
-            self.cleanup_virtual_ports()
+        with self._thread_lock:
+            if self._initialized:
+                return self.virtual_port_active
+                
+            if not RTMIDI_AVAILABLE:
+                self.logger.warning("rtmidi가 사용할 수 없어 가상 포트를 시뮬레이션 모드로 실행합니다.")
+                self.virtual_port_active = True  # Simulate active state
+                self._initialized = True
+                return True
             
-            # Create virtual MIDI ports in a separate thread to avoid GIL issues
-            def create_ports_in_thread():
-                try:
-                    # Create virtual MIDI output port (for presenter connection)
-                    self.virtual_midi_out = rtmidi.MidiOut()
-                    self.virtual_midi_out.open_virtual_port(f"{self.virtual_port_name} Out")
-                    self.logger.info(f"가상 출력 포트 생성: '{self.virtual_port_name} Out'")
-                    
-                    # Create virtual MIDI input port (for receiving from presenter)
-                    self.virtual_midi_in = rtmidi.MidiIn()
-                    self.virtual_midi_in.open_virtual_port(f"{self.virtual_port_name} In")
-                    self.virtual_midi_in.set_callback(self._virtual_midi_callback)
-                    self.logger.info(f"가상 입력 포트 생성: '{self.virtual_port_name} In'")
-                    
-                    self.virtual_port_active = True
-                    self.logger.info(f"✅ 가상 MIDI 포트 생성 완료: '{self.virtual_port_name}'")
-                    self.logger.info("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
-                    
-                except Exception as e:
-                    self.logger.error(f"가상 MIDI 포트 생성 실패: {e}")
-                    self.cleanup_virtual_ports()
-                    # Fallback to simulation mode
-                    self.virtual_port_active = True
-                    self.logger.info(f"가상 MIDI(S) 포트 시뮬레이션 모드 활성화: '{self.virtual_port_name}'")
-            
-            # Start port creation in separate thread
-            port_thread = threading.Thread(target=create_ports_in_thread, daemon=True, name="VirtualPortCreation")
-            port_thread.start()
-            
-            # Mark as active immediately (ports will be created in background)
-            self.virtual_port_active = True
-            self.logger.info(f"가상 MIDI 포트 생성 시작: '{self.virtual_port_name}'")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"가상 MIDI 포트 초기화 실패: {e}")
-            self.cleanup_virtual_ports()
-            # Fallback to simulation mode
-            self.virtual_port_active = True
-            return True
+            try:
+                # Clean up existing ports first
+                self.cleanup_virtual_ports()
+                
+                # Create virtual MIDI ports in a separate thread to avoid GIL issues
+                def create_ports_in_thread():
+                    try:
+                        # Create virtual MIDI output port (for presenter connection)
+                        self.virtual_midi_out = rtmidi.MidiOut()
+                        self.virtual_midi_out.open_virtual_port(f"{self.virtual_port_name} Out")
+                        self.logger.info(f"가상 출력 포트 생성: '{self.virtual_port_name} Out'")
+                        
+                        # Create virtual MIDI input port (for receiving from presenter)
+                        self.virtual_midi_in = rtmidi.MidiIn()
+                        self.virtual_midi_in.open_virtual_port(f"{self.virtual_port_name} In")
+                        self.virtual_midi_in.set_callback(self._virtual_midi_callback)
+                        self.logger.info(f"가상 입력 포트 생성: '{self.virtual_port_name} In'")
+                        
+                        with self._thread_lock:
+                            self.virtual_port_active = True
+                        self.logger.info(f"✅ 가상 MIDI 포트 생성 완료: '{self.virtual_port_name}'")
+                        self.logger.info("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
+                        
+                    except Exception as e:
+                        self.logger.error(f"가상 MIDI 포트 생성 실패: {e}")
+                        self.cleanup_virtual_ports()
+                        # Fallback to simulation mode
+                        with self._thread_lock:
+                            self.virtual_port_active = True
+                        self.logger.info(f"가상 MIDI(S) 포트 시뮬레이션 모드 활성화: '{self.virtual_port_name}'")
+                
+                # Start port creation in separate thread
+                port_thread = threading.Thread(target=create_ports_in_thread, daemon=True, name="VirtualPortCreation")
+                port_thread.start()
+                
+                # Mark as active immediately (ports will be created in background)
+                self.virtual_port_active = True
+                self._initialized = True
+                self.logger.info(f"가상 MIDI 포트 생성 시작: '{self.virtual_port_name}'")
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"가상 MIDI 포트 초기화 실패: {e}")
+                self.cleanup_virtual_ports()
+                # Fallback to simulation mode
+                self.virtual_port_active = True
+                self._initialized = True
+                return True
     
     def _ensure_ports_created(self):
         """Ensure virtual MIDI ports are created (lazy initialization)."""
@@ -161,25 +172,27 @@ class MidiBackend:
     
     def cleanup_virtual_ports(self) -> None:
         """Clean up virtual MIDI ports."""
-        try:
-            if self.virtual_midi_out:
-                try:
-                    self.virtual_midi_out.close_port()
-                except:
-                    pass
-                self.virtual_midi_out = None
-            
-            if self.virtual_midi_in:
-                try:
-                    self.virtual_midi_in.close_port()
-                except:
-                    pass
-                self.virtual_midi_in = None
-            
-            self.virtual_port_active = False
-            
-        except Exception as e:
-            self.logger.error(f"가상 MIDI 포트 정리 오류: {e}")
+        with self._thread_lock:
+            try:
+                if self.virtual_midi_out:
+                    try:
+                        self.virtual_midi_out.close_port()
+                    except Exception:
+                        pass  # Ignore cleanup errors
+                    self.virtual_midi_out = None
+                
+                if self.virtual_midi_in:
+                    try:
+                        self.virtual_midi_in.close_port()
+                    except Exception:
+                        pass  # Ignore cleanup errors
+                    self.virtual_midi_in = None
+                
+                self.virtual_port_active = False
+                self._initialized = False
+                
+            except Exception as e:
+                self.logger.error(f"가상 MIDI 포트 정리 오류: {e}")
     
     def _virtual_midi_callback(self, message, data):
         """GIL-safe callback for virtual MIDI input messages."""
@@ -240,15 +253,20 @@ class MidiBackend:
         if not self._message_handler:
             return
         
-        # Process all available messages
-        while True:
+        # Process all available messages (limit to prevent blocking)
+        max_messages = 100  # Process max 100 messages per call
+        processed = 0
+        
+        while processed < max_messages:
             try:
                 message = self._message_queue.get_nowait()
                 self._message_handler(message)
+                processed += 1
             except Empty:
                 break
             except Exception as e:
                 self.logger.error(f"메시지 처리 오류: {e}")
+                break
     
     def send_control_change(self, control: int, value: int, channel: int) -> bool:
         """Send Control Change message to virtual port."""
@@ -332,6 +350,10 @@ class MidiBackend:
     
     def shutdown(self) -> None:
         """Complete shutdown of MIDI backend."""
-        self.stop_monitoring()
-        self.cleanup_virtual_ports()
-        self.logger.info("MIDI 백엔드 종료")
+        with self._thread_lock:
+            if not self._initialized:
+                return
+                
+            self.stop_monitoring()
+            self.cleanup_virtual_ports()
+            self.logger.info("MIDI 백엔드 종료")

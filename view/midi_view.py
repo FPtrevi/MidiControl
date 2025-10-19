@@ -4,7 +4,7 @@ Thread-safe implementation with proper GUI thread handling.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import List, Callable, Optional, Dict, Any
+from typing import List, Callable, Optional, Dict, Any, Union
 import threading
 
 from config.settings import (
@@ -31,11 +31,11 @@ class MidiMixerView:
         self.root.resizable(WINDOW_RESIZABLE[0], WINDOW_RESIZABLE[1])
         
         # Callback functions (set by controller)
-        self.on_connect_callback: Optional[Callable] = None
-        self.on_disconnect_callback: Optional[Callable] = None
-        self.on_refresh_ports_callback: Optional[Callable] = None
-        self.on_mixer_changed_callback: Optional[Callable] = None
-        self.update_callback: Optional[Callable] = None
+        self.on_connect_callback: Optional[Callable[[], None]] = None
+        self.on_disconnect_callback: Optional[Callable[[], None]] = None
+        self.on_refresh_ports_callback: Optional[Callable[[], None]] = None
+        self.on_mixer_changed_callback: Optional[Callable[[str], None]] = None
+        self.update_callback: Optional[Callable[[], None]] = None
         
         # GUI variables
         self.mixer_var = tk.StringVar()
@@ -53,12 +53,15 @@ class MidiMixerView:
         
         # Connection state
         self.is_connected = False
+        self._initialized = False
         
         # Create GUI elements
         self._create_widgets()
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+        self._initialized = True
     
     def _create_widgets(self) -> None:
         """Create and layout all GUI widgets."""
@@ -182,23 +185,23 @@ class MidiMixerView:
         if mixer == "DM3":
             # Validate DM3 connection parameters
             try:
-                ip = self.dm3_ip_var.get()
-                port = int(self.dm3_port_var.get())
+                ip = self.dm3_ip_var.get().strip()
+                port = int(self.dm3_port_var.get().strip())
                 if not ip or port <= 0 or port > 65535:
                     raise ValueError()
-            except ValueError:
+            except (ValueError, AttributeError):
                 messagebox.showerror("입력 오류", "DM3 IP 주소와 포트를 올바르게 입력해주세요.")
                 return False
         
         elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
             # Validate Qu-5 connection parameters
             try:
-                ip = self.qu5_ip_var.get()
-                port = int(self.qu5_port_var.get())
-                channel = int(self.qu5_channel_var.get())
+                ip = self.qu5_ip_var.get().strip()
+                port = int(self.qu5_port_var.get().strip())
+                channel = int(self.qu5_channel_var.get().strip())
                 if not ip or port <= 0 or port > 65535 or channel < 1 or channel > 16:
                     raise ValueError()
-            except ValueError:
+            except (ValueError, AttributeError):
                 messagebox.showerror("입력 오류", "Qu-5 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
                 return False
         
@@ -206,28 +209,31 @@ class MidiMixerView:
     
     def _on_closing(self) -> None:
         """Handle window closing."""
+        if not self._initialized:
+            return
+            
         if self.is_connected:
             self._on_disconnect()
         self.root.destroy()
     
     # Public interface methods
-    def set_connect_callback(self, callback: Callable) -> None:
+    def set_connect_callback(self, callback: Callable[[], None]) -> None:
         """Set connect callback function."""
         self.on_connect_callback = callback
     
-    def set_disconnect_callback(self, callback: Callable) -> None:
+    def set_disconnect_callback(self, callback: Callable[[], None]) -> None:
         """Set disconnect callback function."""
         self.on_disconnect_callback = callback
     
-    def set_refresh_ports_callback(self, callback: Callable) -> None:
+    def set_refresh_ports_callback(self, callback: Callable[[], None]) -> None:
         """Deprecated: refresh is automatic; keep for compatibility."""
         self.on_refresh_ports_callback = None
     
-    def set_mixer_changed_callback(self, callback: Callable) -> None:
+    def set_mixer_changed_callback(self, callback: Callable[[str], None]) -> None:
         """Set mixer changed callback function."""
         self.on_mixer_changed_callback = callback
     
-    def set_update_callback(self, callback: Callable) -> None:
+    def set_update_callback(self, callback: Callable[[], None]) -> None:
         """Set update callback function."""
         self.update_callback = callback
     
@@ -252,9 +258,16 @@ class MidiMixerView:
     
     def append_log(self, message: str) -> None:
         """Append message to log (thread-safe)."""
+        if not self._initialized:
+            return
+            
         def _append():
-            self.log_text.insert(tk.END, f"{message}\n")
-            self.log_text.see(tk.END)
+            try:
+                self.log_text.insert(tk.END, f"{message}\n")
+                self.log_text.see(tk.END)
+            except tk.TclError:
+                # Widget might be destroyed
+                pass
         
         # Ensure GUI updates happen on main thread
         if threading.current_thread() == threading.main_thread():
@@ -264,13 +277,20 @@ class MidiMixerView:
     
     def show_message(self, title: str, message: str, msg_type: str = "info") -> None:
         """Show message dialog (thread-safe)."""
+        if not self._initialized:
+            return
+            
         def _show():
-            if msg_type == "error":
-                messagebox.showerror(title, message)
-            elif msg_type == "warning":
-                messagebox.showwarning(title, message)
-            else:
-                messagebox.showinfo(title, message)
+            try:
+                if msg_type == "error":
+                    messagebox.showerror(title, message)
+                elif msg_type == "warning":
+                    messagebox.showwarning(title, message)
+                else:
+                    messagebox.showinfo(title, message)
+            except tk.TclError:
+                # Widget might be destroyed
+                pass
         
         # Ensure dialogs appear on main thread
         if threading.current_thread() == threading.main_thread():
@@ -325,6 +345,9 @@ class MidiMixerView:
     
     def _schedule_update(self) -> None:
         """Schedule periodic updates for MIDI message processing."""
+        if not self._initialized:
+            return
+            
         # Call controller update if available
         if self.update_callback:
             try:
@@ -337,4 +360,6 @@ class MidiMixerView:
     
     def quit(self) -> None:
         """Quit the GUI application."""
-        self.root.quit()
+        if self._initialized:
+            self._initialized = False
+            self.root.quit()

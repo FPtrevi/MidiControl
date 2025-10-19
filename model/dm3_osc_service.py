@@ -7,7 +7,7 @@ import subprocess
 import platform
 import threading
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from pythonosc import udp_client
 
 from model.base_service import BaseMidiService
@@ -35,6 +35,9 @@ class DM3OSCService(BaseMidiService):
         self.dm3_connected = False
         self.connection_monitor_active = False
         self.connection_monitor_thread: Optional[threading.Thread] = None
+        self._connection_lock = threading.RLock()
+        self._last_ping_time = 0.0
+        self._ping_interval = 3.0  # Ping every 3 seconds
     
     def set_connection_params(self, ip: str, port: int) -> None:
         """Set DM3 connection parameters."""
@@ -44,48 +47,60 @@ class DM3OSCService(BaseMidiService):
     
     def connect(self) -> bool:
         """Connect to DM3 mixer via OSC."""
-        try:
-            self.logger.info(f"🔍 DM3 연결 시도: {self.dm3_ip}:{self.dm3_port}")
-            
-            # 1. Network connectivity test
-            if not self.ping_host(self.dm3_ip):
-                raise Exception(f"Ping 테스트 실패: {self.dm3_ip} - 네트워크 연결을 확인하세요")
-            
-            # 2. Create OSC client
-            self.dm3_client = udp_client.SimpleUDPClient(self.dm3_ip, self.dm3_port)
-            
-            # 3. Test OSC connection
+        with self._connection_lock:
+            if self.dm3_connected:
+                self.logger.info("DM3가 이미 연결되어 있습니다")
+                return True
+                
             try:
-                self.dm3_client.send_message("/test_connection", "ping")
-                self.logger.info("✅ OSC 테스트 메시지 전송 완료")
-            except Exception as osc_error:
-                self.logger.warning(f"⚠️ OSC 테스트 메시지 전송 실패: {osc_error}")
-                self.logger.info("OSC 전송 실패했지만 연결은 계속 진행합니다")
-            
-            # 4. Connection successful
-            self.dm3_connected = True
-            self.logger.info(f"🎉 DM3 믹서 연결 성공: {self.dm3_ip}:{self.dm3_port}")
-            
-            # 5. Start connection monitoring
-            self.start_connection_monitor()
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"❌ DM3 연결 실패: {e}")
-            self.dm3_client = None
-            self.dm3_connected = False
-            return False
+                self.logger.info(f"🔍 DM3 연결 시도: {self.dm3_ip}:{self.dm3_port}")
+                
+                # 1. Network connectivity test
+                if not self.ping_host(self.dm3_ip):
+                    raise Exception(f"Ping 테스트 실패: {self.dm3_ip} - 네트워크 연결을 확인하세요")
+                
+                # 2. Create OSC client
+                self.dm3_client = udp_client.SimpleUDPClient(self.dm3_ip, self.dm3_port)
+                
+                # 3. Test OSC connection
+                try:
+                    self.dm3_client.send_message("/test_connection", "ping")
+                    self.logger.info("✅ OSC 테스트 메시지 전송 완료")
+                except Exception as osc_error:
+                    self.logger.warning(f"⚠️ OSC 테스트 메시지 전송 실패: {osc_error}")
+                    self.logger.info("OSC 전송 실패했지만 연결은 계속 진행합니다")
+                
+                # 4. Connection successful
+                self.dm3_connected = True
+                self.logger.info(f"🎉 DM3 믹서 연결 성공: {self.dm3_ip}:{self.dm3_port}")
+                
+                # 5. Start connection monitoring
+                self.start_connection_monitor()
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"❌ DM3 연결 실패: {e}")
+                self.dm3_client = None
+                self.dm3_connected = False
+                return False
     
     def disconnect(self) -> None:
         """Disconnect from DM3 mixer."""
-        self.stop_connection_monitor()
-        self.dm3_client = None
-        self.dm3_connected = False
-        self.logger.info("DM3 믹서 연결 해제됨")
+        with self._connection_lock:
+            self.stop_connection_monitor()
+            self.dm3_client = None
+            self.dm3_connected = False
+            self.logger.info("DM3 믹서 연결 해제됨")
     
     def ping_host(self, ip: str) -> bool:
-        """Test host connectivity with ping."""
+        """Test host connectivity with ping (with caching)."""
+        current_time = time.time()
+        
+        # Use cached result if ping was done recently
+        if current_time - self._last_ping_time < self._ping_interval:
+            return True  # Assume still connected if pinged recently
+            
         try:
             if platform.system().lower() == "windows":
                 cmd = ["ping", "-n", "1", "-w", "2000", ip]
@@ -93,7 +108,12 @@ class DM3OSCService(BaseMidiService):
                 cmd = ["ping", "-c", "1", "-W", "2", ip]
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
-            return result.returncode == 0
+            success = result.returncode == 0
+            
+            if success:
+                self._last_ping_time = current_time
+                
+            return success
             
         except Exception as e:
             self.logger.error(f"Ping 테스트 예외: {e}")
@@ -158,17 +178,20 @@ class DM3OSCService(BaseMidiService):
     
     def send_osc_message(self, address: str, *args) -> bool:
         """Send OSC message to DM3."""
-        if not self.dm3_connected or not self.dm3_client:
-            self.logger.warning("⚠️ DM3에 연결되지 않음")
-            return False
-        
-        try:
-            self.dm3_client.send_message(address, args)
-            self.logger.debug(f"📡 DM3 OSC 전송: {address} -> {args}")
-            return True
-        except Exception as e:
-            self.logger.error(f"❌ DM3 OSC 전송 실패: {e}")
-            return False
+        with self._connection_lock:
+            if not self.dm3_connected or not self.dm3_client:
+                self.logger.warning("⚠️ DM3에 연결되지 않음")
+                return False
+            
+            try:
+                self.dm3_client.send_message(address, args)
+                self.logger.debug(f"📡 DM3 OSC 전송: {address} -> {args}")
+                return True
+            except Exception as e:
+                self.logger.error(f"❌ DM3 OSC 전송 실패: {e}")
+                # Mark as disconnected on send failure
+                self.dm3_connected = False
+                return False
     
     def handle_mute(self, note: int, velocity: int, channel: int) -> None:
         """Handle mute control for DM3."""

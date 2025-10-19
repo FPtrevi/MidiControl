@@ -8,6 +8,7 @@ import os
 import signal
 import threading
 import time
+from typing import Optional
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -25,8 +26,9 @@ class MidiMixerApp:
     
     def __init__(self):
         self.logger = get_logger(__name__)
-        self.controller: MidiController = None
+        self.controller: Optional[MidiController] = None
         self.shutdown_event = threading.Event()
+        self._initialized = False
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -38,9 +40,10 @@ class MidiMixerApp:
         """Handle shutdown signals gracefully."""
         self.logger.info(f"신호 수신: {signum}, 종료 중...")
         self.shutdown_event.set()
-        self.shutdown()
+        if self._initialized:
+            self.shutdown()
     
-    def run(self):
+    def run(self) -> int:
         """Run the application with GIL-safe initialization."""
         try:
             # Initialize controller on main thread to keep mido/rtmidi calls GIL-safe
@@ -50,27 +53,25 @@ class MidiMixerApp:
             # Initialize controller (includes virtual MIDI port creation)
             # This must run on main thread to avoid GIL conflicts with rtmidi
             self.controller.initialize()
+            self._initialized = True
             
             # Main update loop
             self._main_loop()
             
+        except KeyboardInterrupt:
+            self.logger.info("사용자에 의해 중단됨")
         except Exception as e:
             self.logger.error(f"애플리케이션 실행 오류: {e}")
             import traceback
             self.logger.error(f"스택 트레이스: {traceback.format_exc()}")
             return 1
+        finally:
+            if self._initialized:
+                self.shutdown()
         
         return 0
     
-    def _run_controller(self):
-        """Deprecated: controller runs on main thread now."""
-        try:
-            self.controller.initialize()
-        except Exception as e:
-            self.logger.error(f"컨트롤러 초기화 오류: {e}")
-            self.shutdown_event.set()
-    
-    def _main_loop(self):
+    def _main_loop(self) -> None:
         """Main application loop with update cycle."""
         self.logger.info("메인 루프 시작")
         
@@ -83,11 +84,13 @@ class MidiMixerApp:
             self.logger.info("사용자에 의해 중단됨")
         except Exception as e:
             self.logger.error(f"메인 루프 오류: {e}")
-        finally:
-            self.shutdown()
+            raise
     
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the application gracefully."""
+        if not self._initialized:
+            return
+            
         try:
             self.logger.info("애플리케이션 종료 중...")
             
@@ -95,13 +98,14 @@ class MidiMixerApp:
                 self.controller.shutdown()
             
             self.shutdown_event.set()
+            self._initialized = False
             self.logger.info("애플리케이션 종료 완료")
             
         except Exception as e:
             self.logger.error(f"종료 중 오류: {e}")
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     print("MIDI Mixer Control v1.0.1")
     print("=" * 50)
@@ -112,13 +116,22 @@ def main():
         return 1
     
     # Check required packages
-    try:
-        import mido
-        import tkinter
-        import threading
-        import json
-    except ImportError as e:
-        print(f"오류: 필요한 패키지가 설치되지 않았습니다: {e}")
+    required_packages = {
+        'mido': 'mido',
+        'tkinter': 'tkinter (Python 기본 패키지)',
+        'threading': 'threading (Python 기본 패키지)',
+        'json': 'json (Python 기본 패키지)'
+    }
+    
+    missing_packages = []
+    for package, description in required_packages.items():
+        try:
+            __import__(package)
+        except ImportError:
+            missing_packages.append(description)
+    
+    if missing_packages:
+        print(f"오류: 필요한 패키지가 설치되지 않았습니다: {', '.join(missing_packages)}")
         print("다음 명령으로 설치하세요: pip install mido")
         return 1
     

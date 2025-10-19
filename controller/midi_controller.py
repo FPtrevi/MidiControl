@@ -4,7 +4,7 @@ Coordinates between view, model services, and MIDI backend.
 Implements MVC pattern with thread-safe communication.
 """
 import threading
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import time
 import mido
 
@@ -36,14 +36,18 @@ class MidiController:
         
         # Connection state
         self.is_monitoring = False
+        self._initialized = False
+        
         # Port change detection state
-        self._last_input_ports: Optional[list[str]] = None
-        self._last_output_ports: Optional[list[str]] = None
+        self._last_input_ports: Optional[List[str]] = None
+        self._last_output_ports: Optional[List[str]] = None
         self._last_port_scan_time: float = 0.0
         self._port_scan_interval_sec: float = PORT_WATCH_INTERVAL_SEC
+        
         # Background watcher
         self._port_watcher_thread: Optional[threading.Thread] = None
         self._port_watcher_stop = threading.Event()
+        self._controller_lock = threading.RLock()
         
         # Set up callbacks
         self._setup_callbacks()
@@ -68,62 +72,64 @@ class MidiController:
     
     def _on_connect(self) -> None:
         """Handle connection request from view."""
-        try:
-            params = self.view.get_connection_params()
-            mixer = params["mixer"]
-            
-            # Initialize services if not done
-            if not self.dm3_service or not self.qu5_service:
-                self._initialize_services(mixer)
-            
-            # Connect to appropriate mixer
-            mixer_params = self.view.get_mixer_connection_params()
-            connection_success = False
-            
-            if mixer == "DM3":
-                if self.dm3_service:
-                    connection_success = self.dm3_service.connect()
-            elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
-                if self.qu5_service:
-                    connection_success = self.qu5_service.connect()
-            
-            if not connection_success:
-                self.view.show_message("연결 오류", f"{mixer} 믹서 연결에 실패했습니다.", "error")
-                return
-            
-            # Start monitoring
-            if self.midi_backend.start_monitoring():
-                self.is_monitoring = True
-                self.view.set_connection_state(True)
-                self.view.clear_log()
-                self.view.append_log(f"🎉 {mixer} 믹서 연결 성공")
-                self.view.append_log(f"📡 가상 MIDI 포트 활성화: '{self.midi_backend.virtual_port_name}'")
-                self.view.append_log("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
-                self.logger.info(f"{mixer} 믹서 연결 성공")
-            else:
-                self.view.show_message("연결 오류", "MIDI 모니터링 시작에 실패했습니다.", "error")
+        with self._controller_lock:
+            try:
+                params = self.view.get_connection_params()
+                mixer = params["mixer"]
                 
-        except Exception as e:
-            self.logger.error(f"연결 오류: {e}")
-            self.view.show_message("연결 오류", f"연결 중 오류가 발생했습니다: {e}", "error")
+                # Initialize services if not done
+                if not self.dm3_service or not self.qu5_service:
+                    self._initialize_services(mixer)
+                
+                # Connect to appropriate mixer
+                mixer_params = self.view.get_mixer_connection_params()
+                connection_success = False
+                
+                if mixer == "DM3":
+                    if self.dm3_service:
+                        connection_success = self.dm3_service.connect()
+                elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+                    if self.qu5_service:
+                        connection_success = self.qu5_service.connect()
+                
+                if not connection_success:
+                    self.view.show_message("연결 오류", f"{mixer} 믹서 연결에 실패했습니다.", "error")
+                    return
+                
+                # Start monitoring
+                if self.midi_backend.start_monitoring():
+                    self.is_monitoring = True
+                    self.view.set_connection_state(True)
+                    self.view.clear_log()
+                    self.view.append_log(f"🎉 {mixer} 믹서 연결 성공")
+                    self.view.append_log(f"📡 가상 MIDI 포트 활성화: '{self.midi_backend.virtual_port_name}'")
+                    self.view.append_log("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
+                    self.logger.info(f"{mixer} 믹서 연결 성공")
+                else:
+                    self.view.show_message("연결 오류", "MIDI 모니터링 시작에 실패했습니다.", "error")
+                    
+            except Exception as e:
+                self.logger.error(f"연결 오류: {e}")
+                self.view.show_message("연결 오류", f"연결 중 오류가 발생했습니다: {e}", "error")
     
     def _on_disconnect(self) -> None:
         """Handle disconnection request from view."""
-        try:
-            # Disconnect from mixer services
-            if self.dm3_service:
-                self.dm3_service.disconnect()
-            if self.qu5_service:
-                self.qu5_service.disconnect()
-            
-            self.midi_backend.stop_monitoring()
-            self.is_monitoring = False
-            self.view.set_connection_state(False)
-            self.view.append_log("믹서 연결 해제됨")
-            self.logger.info("믹서 연결 해제")
-            
-        except Exception as e:
-            self.logger.error(f"연결 해제 오류: {e}")
+        with self._controller_lock:
+            try:
+                # Disconnect from mixer services
+                if self.dm3_service:
+                    self.dm3_service.disconnect()
+                if self.qu5_service:
+                    self.qu5_service.disconnect()
+                
+                self.midi_backend.stop_monitoring()
+                self.is_monitoring = False
+                self.view.set_connection_state(False)
+                self.view.append_log("믹서 연결 해제됨")
+                self.logger.info("믹서 연결 해제")
+                
+            except Exception as e:
+                self.logger.error(f"연결 해제 오류: {e}")
     
     def _on_refresh_ports(self) -> None:
         """Handle port refresh request from view (virtual ports only)."""
@@ -230,97 +236,108 @@ class MidiController:
     
     def initialize(self) -> None:
         """Initialize the controller (without starting GUI main loop)."""
-        try:
-            self.logger.info("컨트롤러 초기화 시작")
-            
-            # 0) Create virtual MIDI ports first (must be on main thread to avoid GIL issues)
-            if self.midi_backend.create_virtual_ports():
-                self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, True)
-                self.logger.info("가상 MIDI 포트 생성 성공")
-            else:
-                self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, False)
-                self.logger.warning("가상 MIDI 포트 생성 실패 - 시뮬레이션 모드로 실행")
-            
-            # 1) 저장된 설정 로드하여 View에 적용 (가능한 경우)
+        with self._controller_lock:
+            if self._initialized:
+                self.logger.info("컨트롤러가 이미 초기화되었습니다")
+                return
+                
             try:
-                prefs = load_prefs()
-                mixer = prefs.get("mixer")
-                input_port = prefs.get("input_port")
-                output_port = prefs.get("output_port")
-                channel = prefs.get("channel")
+                self.logger.info("컨트롤러 초기화 시작")
+                
+                # 0) Create virtual MIDI ports first (must be on main thread to avoid GIL issues)
+                if self.midi_backend.create_virtual_ports():
+                    self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, True)
+                    self.logger.info("가상 MIDI 포트 생성 성공")
+                else:
+                    self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, False)
+                    self.logger.warning("가상 MIDI 포트 생성 실패 - 시뮬레이션 모드로 실행")
+                
+                # 1) 저장된 설정 로드하여 View에 적용 (가능한 경우)
+                try:
+                    prefs = load_prefs()
+                    mixer = prefs.get("mixer")
+                    input_port = prefs.get("input_port")
+                    output_port = prefs.get("output_port")
+                    channel = prefs.get("channel")
 
-                # Mixer 우선 적용
-                if isinstance(mixer, str) and mixer:
-                    self.view.mixer_var.set(mixer)
-                    # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
-                    try:
-                        self._on_mixer_changed(mixer)
-                    except Exception:
-                        pass
+                    # Mixer 우선 적용
+                    if isinstance(mixer, str) and mixer:
+                        self.view.mixer_var.set(mixer)
+                        # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
+                        try:
+                            self._on_mixer_changed(mixer)
+                        except Exception:
+                            pass
 
-                # 채널 적용 (유효 범위 체크는 view 검증에 맡김)
-                if isinstance(channel, int) and channel:
-                    self.view.channel_var.set(str(channel))
+                    # 채널 적용 (유효 범위 체크는 view 검증에 맡김)
+                    if isinstance(channel, int) and channel:
+                        self.view.channel_var.set(str(channel))
 
-                # Virtual ports are handled automatically, no need for port scanning
-                self.logger.info("가상 MIDI 포트 사용으로 포트 스캔 생략")
+                    # Virtual ports are handled automatically, no need for port scanning
+                    self.logger.info("가상 MIDI 포트 사용으로 포트 스캔 생략")
+                except Exception as e:
+                    self.logger.warning(f"환경설정 로드 중 경고: {e}")
+
+                # Initial port refresh must run on Tk main loop to avoid GIL issues
+                try:
+                    self.view.root.after(0, self._on_refresh_ports)
+                except Exception as e:
+                    # Fallback if root is not ready (should not happen)
+                    self.logger.warning(f"초기 새로고침 스케줄 실패, 즉시 시도: {e}")
+                    self._on_refresh_ports()
+                
+                # Start background port watcher
+                self._start_port_watcher()
+
+                self._initialized = True
+                self.logger.info("컨트롤러 초기화 완료")
+                
             except Exception as e:
-                self.logger.warning(f"환경설정 로드 중 경고: {e}")
-
-            # Initial port refresh must run on Tk main loop to avoid GIL issues
-            try:
-                self.view.root.after(0, self._on_refresh_ports)
-            except Exception as e:
-                # Fallback if root is not ready (should not happen)
-                self.logger.warning(f"초기 새로고침 스케줄 실패, 즉시 시도: {e}")
-                self._on_refresh_ports()
-            
-            # Start background port watcher
-            self._start_port_watcher()
-
-            self.logger.info("컨트롤러 초기화 완료")
-            
-        except Exception as e:
-            self.logger.error(f"컨트롤러 초기화 오류: {e}")
-            raise
+                self.logger.error(f"컨트롤러 초기화 오류: {e}")
+                raise
     
     def shutdown(self) -> None:
         """Shutdown the application."""
-        try:
-            # stop watcher first
-            self._stop_port_watcher()
-            if self.is_monitoring:
-                self._on_disconnect()
-            
-            # 현재 설정 저장
+        with self._controller_lock:
+            if not self._initialized:
+                return
+                
             try:
-                params = self.view.get_connection_params()
-                # channel은 int, 나머지는 str
-                prefs = {
-                    "mixer": params.get("mixer"),
-                    "input_port": params.get("input_port"),
-                    "output_port": params.get("output_port"),
-                    "channel": params.get("channel"),
-                }
-                if not save_prefs(prefs):
-                    self.logger.warning("환경설정 저장 실패")
-                else:
-                    self.logger.info("환경설정 저장 완료")
-            except Exception as e:
-                self.logger.warning(f"환경설정 저장 중 경고: {e}")
+                # stop watcher first
+                self._stop_port_watcher()
+                if self.is_monitoring:
+                    self._on_disconnect()
+                
+                # 현재 설정 저장
+                try:
+                    params = self.view.get_connection_params()
+                    # channel은 int, 나머지는 str
+                    prefs = {
+                        "mixer": params.get("mixer"),
+                        "input_port": params.get("input_port"),
+                        "output_port": params.get("output_port"),
+                        "channel": params.get("channel"),
+                    }
+                    if not save_prefs(prefs):
+                        self.logger.warning("환경설정 저장 실패")
+                    else:
+                        self.logger.info("환경설정 저장 완료")
+                except Exception as e:
+                    self.logger.warning(f"환경설정 저장 중 경고: {e}")
 
-            if self.dm3_service:
-                self.dm3_service.shutdown()
-            if self.qu5_service:
-                self.qu5_service.shutdown()
-            
-            self.midi_backend.shutdown()
-            self.view.quit()
-            
-            self.logger.info("애플리케이션 종료")
-            
-        except Exception as e:
-            self.logger.error(f"종료 중 오류: {e}")
+                if self.dm3_service:
+                    self.dm3_service.shutdown()
+                if self.qu5_service:
+                    self.qu5_service.shutdown()
+                
+                self.midi_backend.shutdown()
+                self.view.quit()
+                
+                self._initialized = False
+                self.logger.info("애플리케이션 종료")
+                
+            except Exception as e:
+                self.logger.error(f"종료 중 오류: {e}")
 
     def _start_port_watcher(self) -> None:
         if self._port_watcher_thread and self._port_watcher_thread.is_alive():

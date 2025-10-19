@@ -8,7 +8,7 @@ import platform
 import threading
 import time
 import mido
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 
 from model.base_service import BaseMidiService
 from utils.logger import get_logger
@@ -37,6 +37,9 @@ class Qu5MIDIService(BaseMidiService):
         # Network connection
         self.qu5_socket: Optional[socket.socket] = None
         self.qu5_connected = False
+        self._connection_lock = threading.RLock()
+        self._last_ping_time = 0.0
+        self._ping_interval = 3.0  # Ping every 3 seconds
     
     def set_connection_params(self, ip: str, port: int, channel: int, use_tcp: bool = True) -> None:
         """Set Qu-5 connection parameters."""
@@ -48,14 +51,19 @@ class Qu5MIDIService(BaseMidiService):
     
     def connect(self) -> bool:
         """Connect to Qu-5 mixer."""
-        try:
-            if self.use_tcp_midi:
-                return self._connect_tcp_midi()
-            else:
-                return self._connect_usb_midi()
-        except Exception as e:
-            self.logger.error(f"❌ Qu-5 연결 실패: {e}")
-            return False
+        with self._connection_lock:
+            if self.qu5_connected:
+                self.logger.info("Qu-5가 이미 연결되어 있습니다")
+                return True
+                
+            try:
+                if self.use_tcp_midi:
+                    return self._connect_tcp_midi()
+                else:
+                    return self._connect_usb_midi()
+            except Exception as e:
+                self.logger.error(f"❌ Qu-5 연결 실패: {e}")
+                return False
     
     def _connect_tcp_midi(self) -> bool:
         """Connect to Qu-5 via TCP/IP MIDI."""
@@ -108,15 +116,25 @@ class Qu5MIDIService(BaseMidiService):
     
     def disconnect(self) -> None:
         """Disconnect from Qu-5 mixer."""
-        if self.qu5_socket:
-            self.qu5_socket.close()
-            self.qu5_socket = None
-        
-        self.qu5_connected = False
-        self.logger.info("Qu-5 믹서 연결 해제됨")
+        with self._connection_lock:
+            if self.qu5_socket:
+                try:
+                    self.qu5_socket.close()
+                except Exception:
+                    pass  # Ignore errors during cleanup
+                self.qu5_socket = None
+            
+            self.qu5_connected = False
+            self.logger.info("Qu-5 믹서 연결 해제됨")
     
     def ping_host(self, ip: str) -> bool:
-        """Test host connectivity with ping."""
+        """Test host connectivity with ping (with caching)."""
+        current_time = time.time()
+        
+        # Use cached result if ping was done recently
+        if current_time - self._last_ping_time < self._ping_interval:
+            return True  # Assume still connected if pinged recently
+            
         try:
             if platform.system().lower() == "windows":
                 cmd = ["ping", "-n", "1", "-w", "2000", ip]
@@ -124,7 +142,12 @@ class Qu5MIDIService(BaseMidiService):
                 cmd = ["ping", "-c", "1", "-W", "2", ip]
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
-            return result.returncode == 0
+            success = result.returncode == 0
+            
+            if success:
+                self._last_ping_time = current_time
+                
+            return success
             
         except Exception as e:
             self.logger.error(f"Ping 테스트 예외: {e}")
@@ -132,25 +155,28 @@ class Qu5MIDIService(BaseMidiService):
     
     def send_midi_message(self, message) -> bool:
         """Send MIDI message to Qu-5."""
-        if not self.qu5_connected:
-            self.logger.warning("⚠️ Qu-5에 연결되지 않음")
-            return False
-        
-        try:
-            if self.use_tcp_midi and self.qu5_socket:
-                # TCP/IP MIDI transmission
-                midi_bytes = bytes(message.bytes())
-                self.qu5_socket.send(midi_bytes)
-                self.logger.debug(f"Qu-5 TCP/IP MIDI 전송: {message}")
-                return True
-            else:
-                # USB MIDI transmission would go here
-                self.logger.debug(f"Qu-5 USB MIDI 전송: {message}")
-                return True
-                
-        except Exception as e:
-            self.logger.error(f"❌ Qu-5 MIDI 전송 실패: {e}")
-            return False
+        with self._connection_lock:
+            if not self.qu5_connected:
+                self.logger.warning("⚠️ Qu-5에 연결되지 않음")
+                return False
+            
+            try:
+                if self.use_tcp_midi and self.qu5_socket:
+                    # TCP/IP MIDI transmission
+                    midi_bytes = bytes(message.bytes())
+                    self.qu5_socket.send(midi_bytes)
+                    self.logger.debug(f"Qu-5 TCP/IP MIDI 전송: {message}")
+                    return True
+                else:
+                    # USB MIDI transmission would go here
+                    self.logger.debug(f"Qu-5 USB MIDI 전송: {message}")
+                    return True
+                    
+            except Exception as e:
+                self.logger.error(f"❌ Qu-5 MIDI 전송 실패: {e}")
+                # Mark as disconnected on send failure
+                self.qu5_connected = False
+                return False
     
     def handle_mute(self, note: int, velocity: int, channel: int) -> None:
         """Handle mute control for Qu-5 using NRPN."""
@@ -183,7 +209,7 @@ class Qu5MIDIService(BaseMidiService):
             # CC 6 = 0 (Data Entry MSB)
             # CC 38 = mute_value (1=mute, 0=unmute)
             
-            sequence = [
+            sequence: List[Tuple[str, int, int, int]] = [
                 ('control_change', 99, 0, midi_channel),
                 ('control_change', 98, 0, midi_channel),
                 ('control_change', 6, 0, midi_channel),

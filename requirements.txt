@@ -1,3 +1,9 @@
-mido>=1.2.10
-python-rtmidi>=1.4.9
-python-osc>=1.8.1
+# Core MIDI libraries
+mido>=1.2.10,<2.0.0
+python-rtmidi>=1.4.9,<2.0.0
+python-osc>=1.8.1,<2.0.0
+
+# Development dependencies (optional)
+# pytest>=6.0.0  # For testing
+# black>=21.0.0  # For code formatting
+# mypy>=0.900    # For type checking
