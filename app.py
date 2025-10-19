@@ -41,10 +41,14 @@ class MidiMixerApp:
         self.shutdown()
     
     def run(self):
-        """Run the application."""
+        """Run the application with GIL-safe initialization."""
         try:
-            # Initialize controller on main thread to keep mido calls GIL-safe
+            # Initialize controller on main thread to keep mido/rtmidi calls GIL-safe
+            self.logger.info("메인 스레드에서 컨트롤러 초기화 중...")
             self.controller = MidiController()
+            
+            # Initialize controller (includes virtual MIDI port creation)
+            # This must run on main thread to avoid GIL conflicts with rtmidi
             self.controller.initialize()
             
             # Main update loop
@@ -52,6 +56,8 @@ class MidiMixerApp:
             
         except Exception as e:
             self.logger.error(f"애플리케이션 실행 오류: {e}")
+            import traceback
+            self.logger.error(f"스택 트레이스: {traceback.format_exc()}")
             return 1
         
         return 0

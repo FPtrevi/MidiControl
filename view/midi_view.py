@@ -11,7 +11,7 @@ from config.settings import (
     WINDOW_TITLE, WINDOW_SIZE, WINDOW_RESIZABLE, 
     DEFAULT_MIDI_CHANNEL, MIDI_CHANNEL_RANGE
 )
-from config.mixer_config import get_supported_mixers
+# Removed mixer_config dependency - we'll define mixers directly
 from utils.logger import get_logger
 
 
@@ -43,6 +43,14 @@ class MidiMixerView:
         self.channel_var = tk.StringVar(value=str(DEFAULT_MIDI_CHANNEL))
         self.output_midi_var = tk.StringVar()
         
+        # Mixer connection parameters
+        self.dm3_ip_var = tk.StringVar(value="192.168.4.2")
+        self.dm3_port_var = tk.StringVar(value="49900")
+        self.qu5_ip_var = tk.StringVar(value="192.168.5.10")
+        self.qu5_port_var = tk.StringVar(value="51325")
+        self.qu5_channel_var = tk.StringVar(value="1")
+        self.use_tcp_midi_var = tk.BooleanVar(value=True)
+        
         # Connection state
         self.is_connected = False
         
@@ -55,57 +63,73 @@ class MidiMixerView:
     def _create_widgets(self) -> None:
         """Create and layout all GUI widgets."""
         
-        # Mixer selection
-        mixer_label = ttk.Label(self.root, text="믹서 선택:")
-        mixer_label.pack(pady=(20, 5))
+        # Main container
+        main_container = ttk.Frame(self.root, padding="10")
+        main_container.pack(fill="both", expand=True)
         
-        mixer_dropdown = ttk.Combobox(self.root, textvariable=self.mixer_var, state="readonly")
-        mixer_dropdown['values'] = get_supported_mixers()
+        # Mixer selection
+        mixer_frame = ttk.LabelFrame(main_container, text="믹서 선택", padding="5")
+        mixer_frame.pack(fill="x", pady=(0, 10))
+        
+        mixer_dropdown = ttk.Combobox(mixer_frame, textvariable=self.mixer_var, state="readonly")
+        mixer_dropdown['values'] = ["DM3", "Qu-5", "Qu-6", "Qu-7"]
         mixer_dropdown.current(0)
         mixer_dropdown.bind('<<ComboboxSelected>>', self._on_mixer_selected)
         mixer_dropdown.pack()
         
-        # Input MIDI
-        input_midi_label = ttk.Label(self.root, text="입력 미디:")
-        input_midi_label.pack(pady=(15, 5))
+        # Mixer connection settings
+        self.connection_frame = ttk.LabelFrame(main_container, text="믹서 연결 설정", padding="5")
+        self.connection_frame.pack(fill="x", pady=(0, 10))
         
-        self.input_midi_dropdown = ttk.Combobox(self.root, textvariable=self.input_midi_var, state="readonly")
-        self.input_midi_dropdown.pack()
+        # DM3 settings (initially hidden)
+        self.dm3_frame = ttk.Frame(self.connection_frame)
         
-        # MIDI Channel
-        channel_label = ttk.Label(self.root, text="MIDI 채널 번호 (1~16):")
-        channel_label.pack(pady=(15, 5))
+        ttk.Label(self.dm3_frame, text="DM3 IP:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        ttk.Entry(self.dm3_frame, textvariable=self.dm3_ip_var, width=15).grid(row=0, column=1, padx=(0, 10))
         
-        channel_entry = ttk.Entry(self.root, textvariable=self.channel_var, width=10)
-        channel_entry.pack()
+        ttk.Label(self.dm3_frame, text="포트:").grid(row=0, column=2, sticky="w", padx=(0, 5))
+        ttk.Entry(self.dm3_frame, textvariable=self.dm3_port_var, width=10).grid(row=0, column=3)
         
-        # Output MIDI
-        output_midi_label = ttk.Label(self.root, text="출력 미디:")
-        output_midi_label.pack(pady=(15, 5))
+        # Qu-5 settings (initially hidden)
+        self.qu5_frame = ttk.Frame(self.connection_frame)
         
-        self.output_midi_dropdown = ttk.Combobox(self.root, textvariable=self.output_midi_var, state="readonly")
-        self.output_midi_dropdown.pack()
+        ttk.Label(self.qu5_frame, text="Qu-5 IP:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        ttk.Entry(self.qu5_frame, textvariable=self.qu5_ip_var, width=15).grid(row=0, column=1, padx=(0, 10))
+        
+        ttk.Label(self.qu5_frame, text="포트:").grid(row=0, column=2, sticky="w", padx=(0, 5))
+        ttk.Entry(self.qu5_frame, textvariable=self.qu5_port_var, width=10).grid(row=0, column=3, padx=(0, 10))
+        
+        ttk.Label(self.qu5_frame, text="MIDI 채널:").grid(row=0, column=4, sticky="w", padx=(0, 5))
+        ttk.Entry(self.qu5_frame, textvariable=self.qu5_channel_var, width=5).grid(row=0, column=5, padx=(0, 10))
+        
+        ttk.Checkbutton(self.qu5_frame, text="TCP/IP MIDI", variable=self.use_tcp_midi_var).grid(row=0, column=6)
+        
+        # Virtual MIDI info
+        virtual_frame = ttk.LabelFrame(main_container, text="가상 MIDI 포트", padding="5")
+        virtual_frame.pack(fill="x", pady=(0, 10))
+        
+        self.virtual_port_label = ttk.Label(virtual_frame, text="가상 MIDI 포트가 생성되면 여기에 표시됩니다.")
+        self.virtual_port_label.pack()
         
         # Control buttons
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(pady=(20, 10))
+        button_frame = ttk.Frame(main_container)
+        button_frame.pack(pady=(0, 10))
         
-        self.connect_btn = ttk.Button(button_frame, text="연결", command=self._on_connect_toggle)
-        self.connect_btn.pack(side="left")
+        self.connect_btn = ttk.Button(button_frame, text="믹서 연결", command=self._on_connect_toggle)
+        self.connect_btn.pack(side="left", padx=(0, 5))
+        
+        ttk.Button(button_frame, text="포트 새로고침", command=self._on_refresh_ports).pack(side="left")
         
         # Log area
-        log_label = ttk.Label(self.root, text="MIDI 로그:")
-        log_label.pack(pady=(15, 5))
-        
-        log_frame = ttk.Frame(self.root)
-        log_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        log_frame = ttk.LabelFrame(main_container, text="로그", padding="5")
+        log_frame.pack(fill="both", expand=True)
         
         # Scrollbar for log
         scrollbar = ttk.Scrollbar(log_frame)
         scrollbar.pack(side="right", fill="y")
         
         # Log text widget
-        self.log_text = tk.Text(log_frame, height=10, width=30, yscrollcommand=scrollbar.set)
+        self.log_text = tk.Text(log_frame, height=12, width=80, yscrollcommand=scrollbar.set)
         self.log_text.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.log_text.yview)
         
@@ -115,6 +139,15 @@ class MidiMixerView:
     def _on_mixer_selected(self, event) -> None:
         """Handle mixer selection change."""
         mixer = self.mixer_var.get()
+        
+        # Show/hide appropriate connection settings
+        if mixer == "DM3":
+            self.dm3_frame.pack(fill="x")
+            self.qu5_frame.pack_forget()
+        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+            self.qu5_frame.pack(fill="x")
+            self.dm3_frame.pack_forget()
+        
         if self.on_mixer_changed_callback:
             self.on_mixer_changed_callback(mixer)
     
@@ -144,27 +177,30 @@ class MidiMixerView:
     
     def _validate_connection_params(self) -> bool:
         """Validate connection parameters."""
-        # Check input port
-        input_port = self.input_midi_var.get()
-        if input_port in ["사용 가능한 포트 없음", "MIDI 포트 오류"]:
-            messagebox.showerror("입력 오류", "유효한 MIDI 입력 포트를 선택해주세요.")
-            return False
+        mixer = self.mixer_var.get()
         
-        # Check output port
-        output_port = self.output_midi_var.get()
-        if output_port in ["사용 가능한 포트 없음", "MIDI 포트 오류"]:
-            messagebox.showerror("입력 오류", "유효한 MIDI 출력 포트를 선택해주세요.")
-            return False
+        if mixer == "DM3":
+            # Validate DM3 connection parameters
+            try:
+                ip = self.dm3_ip_var.get()
+                port = int(self.dm3_port_var.get())
+                if not ip or port <= 0 or port > 65535:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror("입력 오류", "DM3 IP 주소와 포트를 올바르게 입력해주세요.")
+                return False
         
-        # Check channel number
-        try:
-            channel_num = int(self.channel_var.get())
-            min_ch, max_ch = MIDI_CHANNEL_RANGE
-            if not (min_ch <= channel_num <= max_ch):
-                raise ValueError()
-        except ValueError:
-            messagebox.showerror("입력 오류", "MIDI 채널 번호는 1에서 16 사이의 숫자여야 합니다.")
-            return False
+        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+            # Validate Qu-5 connection parameters
+            try:
+                ip = self.qu5_ip_var.get()
+                port = int(self.qu5_port_var.get())
+                channel = int(self.qu5_channel_var.get())
+                if not ip or port <= 0 or port > 65535 or channel < 1 or channel > 16:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror("입력 오류", "Qu-5 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
+                return False
         
         return True
     
@@ -196,53 +232,19 @@ class MidiMixerView:
         self.update_callback = callback
     
     def update_input_ports(self, ports: List[str]) -> None:
-        """Update input port dropdown options."""
-        def _apply():
-            # sanitize ports list: remove falsy/None and dedupe
-            clean_ports = [p for p in ports if p]
-            # fallback when empty
-            if not clean_ports:
-                clean_ports = ["사용 가능한 포트 없음"]
-
-            self.input_midi_dropdown['values'] = clean_ports
-
-            current = self.input_midi_var.get()
-            if current not in clean_ports:
-                # set to first valid option, or empty if placeholder
-                self.input_midi_var.set(clean_ports[0] if clean_ports[0] != "사용 가능한 포트 없음" else "")
-
-        if threading.current_thread() == threading.main_thread():
-            _apply()
-        else:
-            self.root.after(0, _apply)
+        """Update input port dropdown options (deprecated - virtual ports only)."""
+        # Virtual ports are handled automatically, no need to update dropdowns
+        pass
     
     def update_output_ports(self, ports: List[str]) -> None:
-        """Update output port dropdown options."""
-        def _apply():
-            # sanitize ports list: remove falsy/None and dedupe
-            clean_ports = [p for p in ports if p]
-            # fallback when empty
-            if not clean_ports:
-                clean_ports = ["사용 가능한 포트 없음"]
-
-            self.output_midi_dropdown['values'] = clean_ports
-
-            current = self.output_midi_var.get()
-            if current not in clean_ports:
-                # set to first valid option, or empty if placeholder
-                self.output_midi_var.set(clean_ports[0] if clean_ports[0] != "사용 가능한 포트 없음" else "")
-
-            # 요구사항: 저장된 값이 목록에 없으면 첫 번째 값이 선택된 상태 유지
-
-        if threading.current_thread() == threading.main_thread():
-            _apply()
-        else:
-            self.root.after(0, _apply)
+        """Update output port dropdown options (deprecated - virtual ports only)."""
+        # Virtual ports are handled automatically, no need to update dropdowns
+        pass
     
     def set_connection_state(self, connected: bool) -> None:
         """Update connection state and button text."""
         self.is_connected = connected
-        self.connect_btn.config(text="중지" if connected else "연결")
+        self.connect_btn.config(text="연결 해제" if connected else "믹서 연결")
     
     def clear_log(self) -> None:
         """Clear the log text area."""
@@ -284,6 +286,32 @@ class MidiMixerView:
             "output_port": self.output_midi_var.get(),
             "channel": int(self.channel_var.get())
         }
+    
+    def get_mixer_connection_params(self) -> Dict[str, Any]:
+        """Get mixer-specific connection parameters."""
+        mixer = self.mixer_var.get()
+        
+        if mixer == "DM3":
+            return {
+                "dm3_ip": self.dm3_ip_var.get(),
+                "dm3_port": int(self.dm3_port_var.get())
+            }
+        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+            return {
+                "qu5_ip": self.qu5_ip_var.get(),
+                "qu5_port": int(self.qu5_port_var.get()),
+                "qu5_channel": int(self.qu5_channel_var.get()),
+                "use_tcp_midi": self.use_tcp_midi_var.get()
+            }
+        
+        return {}
+    
+    def update_virtual_port_status(self, port_name: str, active: bool) -> None:
+        """Update virtual port status display."""
+        if active:
+            self.virtual_port_label.config(text=f"✅ 가상 MIDI 포트 활성: '{port_name}'")
+        else:
+            self.virtual_port_label.config(text=f"❌ 가상 MIDI 포트 비활성: '{port_name}'")
     
     def run(self) -> None:
         """Start the GUI main loop."""
