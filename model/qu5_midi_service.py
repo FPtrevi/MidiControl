@@ -1,5 +1,5 @@
 """
-Qu-5 MIDI communication service.
+Qu-5/6/7 MIDI communication service.
 Handles MIDI communication with Qu-5/6/7 mixer via TCP/IP or USB MIDI.
 """
 import socket

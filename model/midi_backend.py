@@ -109,12 +109,12 @@ class MidiBackend:
                         self.virtual_midi_in = rtmidi.MidiIn()
                         self.virtual_midi_in.open_virtual_port(f"{self.virtual_port_name} In")
                         self.virtual_midi_in.set_callback(self._virtual_midi_callback)
-                        self.logger.info(f"가상 입력 포트 생성: '{self.virtual_port_name} In'")
+                        # 가상 입력 포트 생성 (로그 제거)
                         
                         with self._thread_lock:
                             self.virtual_port_active = True
-                        self.logger.info(f"✅ 가상 MIDI 포트 생성 완료: '{self.virtual_port_name}'")
-                        self.logger.info("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
+                        # 가상 MIDI 포트 생성 완료 (로그 제거)
+                        # 프로프리젠터에서 가상 MIDI 포트를 선택하세요! (로그 제거)
                         
                     except Exception as e:
                         self.logger.error(f"가상 MIDI 포트 생성 실패: {e}")
@@ -131,7 +131,7 @@ class MidiBackend:
                 # Mark as active immediately (ports will be created in background)
                 self.virtual_port_active = True
                 self._initialized = True
-                self.logger.info(f"가상 MIDI 포트 생성 시작: '{self.virtual_port_name}'")
+                # 가상 MIDI 포트 생성 시작 (로그 제거)
                 
                 return True
                 
@@ -206,7 +206,7 @@ class MidiBackend:
             # Queue message for main thread processing (thread-safe)
             try:
                 self._message_queue.put_nowait(msg)
-                self.logger.debug(f"MIDI 메시지 큐에 추가: {msg}")
+                # MIDI 메시지 큐에 추가 (로그 제거)
             except Exception as queue_error:
                 self.logger.warning(f"메시지 큐 오류: {queue_error}, 메시지 건너뜀")
                 

@@ -11,7 +11,7 @@ SCENE_NUMBER_RANGE: Tuple[int, int] = (1, 128)
 
 # GUI Settings
 WINDOW_TITLE: str = "MIDI 믹서 설정"
-WINDOW_SIZE: Tuple[int, int] = (320, 480)
+WINDOW_SIZE: Tuple[int, int] = (450, 480)
 WINDOW_RESIZABLE: Tuple[bool, bool] = (False, True)
 
 # Logging
@@ -42,7 +42,7 @@ GUI_UPDATE_INTERVAL_MS: int = 10
 PING_CACHE_INTERVAL_SEC: float = 3.0
 
 # Validation Settings
-VALID_MIXER_TYPES: Tuple[str, ...] = ("DM3", "Qu-5", "Qu-6", "Qu-7")
+VALID_MIXER_TYPES: Tuple[str, ...] = ("DM3", "Qu-5/6/7")
 VALID_LOG_LEVELS: Tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 def get_config() -> Dict[str, Any]:

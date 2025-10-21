@@ -185,7 +185,7 @@ class DM3OSCService(BaseMidiService):
             
             try:
                 self.dm3_client.send_message(address, args)
-                self.logger.debug(f"📡 DM3 OSC 전송: {address} -> {args}")
+                # DM3 OSC 전송 (로그 제거)
                 return True
             except Exception as e:
                 self.logger.error(f"❌ DM3 OSC 전송 실패: {e}")

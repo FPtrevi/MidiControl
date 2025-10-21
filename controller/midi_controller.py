@@ -30,6 +30,10 @@ class MidiController:
         self.view = MidiMixerView()
         self.midi_backend = MidiBackend()
         
+        # Set up logger GUI callbacks
+        self.logger.set_gui_callback(self.view.append_log)
+        self.midi_backend.logger.set_gui_callback(self.view.append_log)
+        
         # Services (initialized after mixer selection)
         self.dm3_service: Optional[DM3OSCService] = None
         self.qu5_service: Optional[Qu5MIDIService] = None
@@ -61,7 +65,7 @@ class MidiController:
         # Note: Virtual MIDI port creation is deferred to initialize() method
         # to ensure it runs on the main thread and avoid GIL issues
         
-        self.logger.info("MidiController 초기화 완료")
+        # MidiController 초기화 완료 (로그 제거)
     
     def _setup_callbacks(self) -> None:
         """Set up callbacks between view and controller."""
@@ -88,7 +92,7 @@ class MidiController:
                 if mixer == "DM3":
                     if self.dm3_service:
                         connection_success = self.dm3_service.connect()
-                elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+                elif mixer == "Qu-5/6/7":
                     if self.qu5_service:
                         connection_success = self.qu5_service.connect()
                 
@@ -102,8 +106,8 @@ class MidiController:
                     self.view.set_connection_state(True)
                     self.view.clear_log()
                     self.view.append_log(f"🎉 {mixer} 믹서 연결 성공")
-                    self.view.append_log(f"📡 가상 MIDI 포트 활성화: '{self.midi_backend.virtual_port_name}'")
-                    self.view.append_log("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
+                    # 가상 MIDI 포트 활성화 메시지 제거
+                    # 프로프리젠터에서 가상 MIDI 포트를 선택하세요! 메시지 제거
                     self.logger.info(f"{mixer} 믹서 연결 성공")
                 else:
                     self.view.show_message("연결 오류", "MIDI 모니터링 시작에 실패했습니다.", "error")
@@ -137,7 +141,7 @@ class MidiController:
             # For virtual ports, we just need to update the virtual port status
             if self.midi_backend.virtual_port_active:
                 self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, True)
-                self.logger.info("가상 MIDI 포트 새로고침 완료")
+                # 가상 MIDI 포트 새로고침 완료 (로그 제거)
             else:
                 self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, False)
                 self.logger.warning("가상 MIDI 포트가 비활성 상태입니다")
@@ -147,7 +151,7 @@ class MidiController:
     def _on_mixer_changed(self, mixer_name: str) -> None:
         """Handle mixer selection change from view."""
         try:
-            self.logger.info(f"믹서 변경: {mixer_name}")
+            # 믹서 변경 (로그 제거)
             
             # Update services if they exist
             if self.dm3_service:
@@ -164,6 +168,8 @@ class MidiController:
         try:
             if mixer_name == "DM3":
                 self.dm3_service = DM3OSCService(mixer_name, self.midi_backend)
+                # Set GUI callback for service logger
+                self.dm3_service.logger.set_gui_callback(self.view.append_log)
                 # Set DM3 connection parameters from view
                 mixer_params = self.view.get_mixer_connection_params()
                 if mixer_params:
@@ -171,8 +177,10 @@ class MidiController:
                         mixer_params.get("dm3_ip", "192.168.4.2"),
                         mixer_params.get("dm3_port", 49900)
                     )
-            elif mixer_name in ["Qu-5", "Qu-6", "Qu-7"]:
+            elif mixer_name == "Qu-5/6/7":
                 self.qu5_service = Qu5MIDIService(mixer_name, self.midi_backend)
+                # Set GUI callback for service logger
+                self.qu5_service.logger.set_gui_callback(self.view.append_log)
                 # Set Qu-5 connection parameters from view
                 mixer_params = self.view.get_mixer_connection_params()
                 if mixer_params:
@@ -209,7 +217,7 @@ class MidiController:
             if message.channel == 0:
                 # Soft key control (for Qu-5/6/7)
                 if message.type == NOTE_ON_TYPE and message.velocity > 0:
-                    if mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
+                    if mixer == "Qu-5/6/7" and self.qu5_service:
                         self.qu5_service.handle_softkey(message.note, message.channel, mixer_midi_channel)
                         
             elif message.channel == 1:
@@ -217,7 +225,7 @@ class MidiController:
                 if message.type == NOTE_ON_TYPE and message.velocity > 0:
                     if mixer == "DM3" and self.dm3_service:
                         self.dm3_service.handle_scene(message.note, message.channel)
-                    elif mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
+                    elif mixer == "Qu-5/6/7" and self.qu5_service:
                         self.qu5_service.handle_scene(message.note, message.channel, mixer_midi_channel)
                         
             elif message.channel == 2:
@@ -225,7 +233,7 @@ class MidiController:
                 effective_velocity = message.velocity if message.type == NOTE_ON_TYPE else 0
                 if mixer == "DM3" and self.dm3_service:
                     self.dm3_service.handle_mute(message.note, effective_velocity, message.channel)
-                elif mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
+                elif mixer == "Qu-5/6/7" and self.qu5_service:
                     self.qu5_service.handle_mute(message.note, effective_velocity, message.channel, mixer_midi_channel)
                         
             else:
@@ -251,12 +259,12 @@ class MidiController:
                 return
                 
             try:
-                self.logger.info("컨트롤러 초기화 시작")
+                # 컨트롤러 초기화 시작 (로그 제거)
                 
                 # 0) Create virtual MIDI ports first (must be on main thread to avoid GIL issues)
                 if self.midi_backend.create_virtual_ports():
                     self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, True)
-                    self.logger.info("가상 MIDI 포트 생성 성공")
+                    # 가상 MIDI 포트 생성 성공 (로그 제거)
                 else:
                     self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, False)
                     self.logger.warning("가상 MIDI 포트 생성 실패 - 시뮬레이션 모드로 실행")
@@ -283,7 +291,7 @@ class MidiController:
                         self.view.channel_var.set(str(channel))
 
                     # Virtual ports are handled automatically, no need for port scanning
-                    self.logger.info("가상 MIDI 포트 사용으로 포트 스캔 생략")
+                    # 가상 MIDI 포트 사용으로 포트 스캔 생략 (로그 제거)
                 except Exception as e:
                     self.logger.warning(f"환경설정 로드 중 경고: {e}")
 
@@ -299,7 +307,7 @@ class MidiController:
                 self._start_port_watcher()
 
                 self._initialized = True
-                self.logger.info("컨트롤러 초기화 완료")
+                # 컨트롤러 초기화 완료 (로그 제거)
                 
             except Exception as e:
                 self.logger.error(f"컨트롤러 초기화 오류: {e}")

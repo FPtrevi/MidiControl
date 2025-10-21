@@ -9,10 +9,12 @@ import threading
 
 from config.settings import (
     WINDOW_TITLE, WINDOW_SIZE, WINDOW_RESIZABLE, 
-    DEFAULT_MIDI_CHANNEL, MIDI_CHANNEL_RANGE
+    DEFAULT_MIDI_CHANNEL, MIDI_CHANNEL_RANGE,
+    DEFAULT_DM3_IP, DEFAULT_DM3_PORT, DEFAULT_QU5_IP, DEFAULT_QU5_PORT
 )
 # Removed mixer_config dependency - we'll define mixers directly
 from utils.logger import get_logger
+from utils.prefs import load_prefs, save_prefs
 
 
 class MidiMixerView:
@@ -46,17 +48,23 @@ class MidiMixerView:
         # MIDI channel for mixer control
         self.midi_channel_var = tk.StringVar(value="1")
         
-        # Mixer connection parameters
-        self.dm3_ip_var = tk.StringVar(value="192.168.4.2")
-        self.dm3_port_var = tk.StringVar(value="49900")
-        self.qu5_ip_var = tk.StringVar(value="192.168.5.10")
-        self.qu5_port_var = tk.StringVar(value="51325")
-        self.qu5_channel_var = tk.StringVar(value="1")
-        self.use_tcp_midi_var = tk.BooleanVar(value=True)
+        # Mixer connection parameters - load from preferences
+        prefs = load_prefs()
+        self.dm3_ip_var = tk.StringVar(value=prefs.get("dm3_ip", DEFAULT_DM3_IP))
+        self.dm3_port_var = tk.StringVar(value=str(prefs.get("dm3_port", DEFAULT_DM3_PORT)))
+        self.qu5_ip_var = tk.StringVar(value=prefs.get("qu5_ip", DEFAULT_QU5_IP))
+        self.qu5_port_var = tk.StringVar(value=str(prefs.get("qu5_port", DEFAULT_QU5_PORT)))
+        self.qu5_channel_var = tk.StringVar(value=str(prefs.get("qu5_channel", 1)))
+        self.use_tcp_midi_var = tk.BooleanVar(value=prefs.get("use_tcp_midi", True))
         
         # Connection state
         self.is_connected = False
         self._initialized = False
+        
+        # Control references for enabling/disabling
+        self.mixer_dropdown = None
+        self.connection_frame = None
+        self.midi_channel_frame = None
         
         # Create GUI elements
         self._create_widgets()
@@ -77,11 +85,11 @@ class MidiMixerView:
         mixer_frame = ttk.LabelFrame(main_container, text="믹서 선택", padding="5")
         mixer_frame.pack(fill="x", pady=(0, 10))
         
-        mixer_dropdown = ttk.Combobox(mixer_frame, textvariable=self.mixer_var, state="readonly")
-        mixer_dropdown['values'] = ["DM3", "Qu-5", "Qu-6", "Qu-7"]
-        mixer_dropdown.current(0)
-        mixer_dropdown.bind('<<ComboboxSelected>>', self._on_mixer_selected)
-        mixer_dropdown.pack()
+        self.mixer_dropdown = ttk.Combobox(mixer_frame, textvariable=self.mixer_var, state="readonly")
+        self.mixer_dropdown['values'] = ["DM3", "Qu-5/6/7"]
+        self.mixer_dropdown.current(0)
+        self.mixer_dropdown.bind('<<ComboboxSelected>>', self._on_mixer_selected)
+        self.mixer_dropdown.pack()
         
         # Mixer connection settings
         self.connection_frame = ttk.LabelFrame(main_container, text="믹서 연결 설정", padding="5")
@@ -111,31 +119,22 @@ class MidiMixerView:
         ttk.Checkbutton(self.qu5_frame, text="TCP/IP MIDI", variable=self.use_tcp_midi_var).grid(row=0, column=6)
         
         # MIDI Channel settings
-        midi_channel_frame = ttk.LabelFrame(main_container, text="MIDI 채널 설정", padding="5")
-        midi_channel_frame.pack(fill="x", pady=(0, 10))
+        self.midi_channel_frame = ttk.LabelFrame(main_container, text="MIDI 채널 설정", padding="5")
+        self.midi_channel_frame.pack(fill="x", pady=(0, 10))
         
-        ttk.Label(midi_channel_frame, text="믹서 MIDI 채널:").grid(row=0, column=0, sticky="w", padx=(0, 5))
-        midi_channel_spinbox = ttk.Spinbox(midi_channel_frame, from_=1, to=16, textvariable=self.midi_channel_var, width=5)
-        midi_channel_spinbox.grid(row=0, column=1, padx=(0, 10))
+        ttk.Label(self.midi_channel_frame, text="믹서 MIDI 채널:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        self.midi_channel_spinbox = ttk.Spinbox(self.midi_channel_frame, from_=1, to=16, textvariable=self.midi_channel_var, width=5)
+        self.midi_channel_spinbox.grid(row=0, column=1, padx=(0, 10))
         
-        ttk.Label(midi_channel_frame, text="(1-16, 믹서로 전송되는 MIDI 메시지의 채널)", 
+        ttk.Label(self.midi_channel_frame, text="(1-16, 믹서로 전송되는 MIDI 메시지의 채널)", 
                  font=("TkDefaultFont", 8)).grid(row=0, column=2, sticky="w")
-        
-        # Virtual MIDI info
-        virtual_frame = ttk.LabelFrame(main_container, text="가상 MIDI 포트", padding="5")
-        virtual_frame.pack(fill="x", pady=(0, 10))
-        
-        self.virtual_port_label = ttk.Label(virtual_frame, text="가상 MIDI 포트가 생성되면 여기에 표시됩니다.")
-        self.virtual_port_label.pack()
         
         # Control buttons
         button_frame = ttk.Frame(main_container)
         button_frame.pack(pady=(0, 10))
         
         self.connect_btn = ttk.Button(button_frame, text="믹서 연결", command=self._on_connect_toggle)
-        self.connect_btn.pack(side="left", padx=(0, 5))
-        
-        ttk.Button(button_frame, text="포트 새로고침", command=self._on_refresh_ports).pack(side="left")
+        self.connect_btn.pack()
         
         # Log area
         log_frame = ttk.LabelFrame(main_container, text="로그", padding="5")
@@ -161,9 +160,13 @@ class MidiMixerView:
         if mixer == "DM3":
             self.dm3_frame.pack(fill="x")
             self.qu5_frame.pack_forget()
-        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+            # DM3는 OSC를 사용하므로 MIDI 채널 설정 비활성화
+            self._set_midi_channel_frame_state("disabled")
+        elif mixer == "Qu-5/6/7":
             self.qu5_frame.pack(fill="x")
             self.dm3_frame.pack_forget()
+            # Qu-5/6/7는 MIDI를 사용하므로 MIDI 채널 설정 활성화
+            self._set_midi_channel_frame_state("normal")
         
         if self.on_mixer_changed_callback:
             self.on_mixer_changed_callback(mixer)
@@ -179,6 +182,9 @@ class MidiMixerView:
         """Handle connection request."""
         if not self._validate_connection_params():
             return
+        
+        # Save current IP settings to preferences
+        self._save_connection_prefs()
         
         if self.on_connect_callback:
             self.on_connect_callback()
@@ -207,8 +213,8 @@ class MidiMixerView:
                 messagebox.showerror("입력 오류", "DM3 IP 주소와 포트를 올바르게 입력해주세요.")
                 return False
         
-        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
-            # Validate Qu-5 connection parameters
+        elif mixer == "Qu-5/6/7":
+            # Validate Qu-5/6/7 connection parameters
             try:
                 ip = self.qu5_ip_var.get().strip()
                 port = int(self.qu5_port_var.get().strip())
@@ -216,10 +222,59 @@ class MidiMixerView:
                 if not ip or port <= 0 or port > 65535 or channel < 1 or channel > 16:
                     raise ValueError()
             except (ValueError, AttributeError):
-                messagebox.showerror("입력 오류", "Qu-5 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
+                messagebox.showerror("입력 오류", "Qu-5/6/7 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
                 return False
         
         return True
+    
+    def _save_connection_prefs(self) -> None:
+        """Save current connection settings to preferences."""
+        prefs = load_prefs()
+        prefs["dm3_ip"] = self.dm3_ip_var.get()
+        prefs["dm3_port"] = int(self.dm3_port_var.get())
+        prefs["qu5_ip"] = self.qu5_ip_var.get()
+        prefs["qu5_port"] = int(self.qu5_port_var.get())
+        prefs["qu5_channel"] = int(self.qu5_channel_var.get())
+        prefs["use_tcp_midi"] = self.use_tcp_midi_var.get()
+        save_prefs(prefs)
+    
+    def _set_connection_frame_state(self, state: str) -> None:
+        """Enable/disable all widgets in connection frame."""
+        if state == "disabled":
+            # Disable all entry widgets and checkbuttons in connection frames
+            for widget in self.connection_frame.winfo_children():
+                self._set_widget_state_recursive(widget, state)
+        else:
+            # Enable all widgets in connection frames
+            for widget in self.connection_frame.winfo_children():
+                self._set_widget_state_recursive(widget, state)
+    
+    def _set_midi_channel_frame_state(self, state: str) -> None:
+        """Enable/disable all widgets in MIDI channel frame."""
+        if state == "disabled":
+            # Disable spinbox
+            self.midi_channel_spinbox.config(state=state)
+        else:
+            # Enable spinbox
+            self.midi_channel_spinbox.config(state=state)
+    
+    def _set_widget_state_recursive(self, widget, state: str) -> None:
+        """Recursively set widget state for nested widgets."""
+        try:
+            if hasattr(widget, 'config'):
+                # Check if widget has state config
+                try:
+                    widget.config(state=state)
+                except tk.TclError:
+                    # Widget doesn't support state config, skip
+                    pass
+            
+            # Recursively apply to children
+            for child in widget.winfo_children():
+                self._set_widget_state_recursive(child, state)
+        except tk.TclError:
+            # Widget might be destroyed, ignore
+            pass
     
     def _on_closing(self) -> None:
         """Handle window closing."""
@@ -265,6 +320,23 @@ class MidiMixerView:
         """Update connection state and button text."""
         self.is_connected = connected
         self.connect_btn.config(text="연결 해제" if connected else "믹서 연결")
+        
+        # Enable/disable controls based on connection state
+        if connected:
+            # 연결 시 모든 컨트롤 비활성화
+            self.mixer_dropdown.config(state="disabled")
+            self._set_connection_frame_state("disabled")
+            self._set_midi_channel_frame_state("disabled")
+        else:
+            # 연결 해제 시 믹서 타입에 따라 적절한 상태로 복원
+            self.mixer_dropdown.config(state="normal")
+            self._set_connection_frame_state("normal")
+            # MIDI 채널 설정은 믹서 타입에 따라 활성화/비활성화
+            mixer = self.mixer_var.get()
+            if mixer == "DM3":
+                self._set_midi_channel_frame_state("disabled")
+            else:  # Qu-5/6/7
+                self._set_midi_channel_frame_state("normal")
     
     def clear_log(self) -> None:
         """Clear the log text area."""
@@ -331,7 +403,7 @@ class MidiMixerView:
                 "dm3_ip": self.dm3_ip_var.get(),
                 "dm3_port": int(self.dm3_port_var.get())
             }
-        elif mixer in ["Qu-5", "Qu-6", "Qu-7"]:
+        elif mixer == "Qu-5/6/7":
             return {
                 "qu5_ip": self.qu5_ip_var.get(),
                 "qu5_port": int(self.qu5_port_var.get()),
@@ -342,11 +414,9 @@ class MidiMixerView:
         return {}
     
     def update_virtual_port_status(self, port_name: str, active: bool) -> None:
-        """Update virtual port status display."""
-        if active:
-            self.virtual_port_label.config(text=f"✅ 가상 MIDI 포트 활성: '{port_name}'")
-        else:
-            self.virtual_port_label.config(text=f"❌ 가상 MIDI 포트 비활성: '{port_name}'")
+        """Update virtual port status display (deprecated - GUI element removed)."""
+        # Virtual port display removed from GUI, but keep method for compatibility
+        pass
     
     def run(self) -> None:
         """Start the GUI main loop."""
