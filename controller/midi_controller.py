@@ -106,8 +106,10 @@ class MidiController:
                     self.view.set_connection_state(True)
                     self.view.clear_log()
                     self.view.append_log(f"🎉 {mixer} 믹서 연결 성공")
-                    # 가상 MIDI 포트 활성화 메시지 제거
-                    # 프로프리젠터에서 가상 MIDI 포트를 선택하세요! 메시지 제거
+                    
+                    # 연결 성공 시 현재 설정 저장
+                    self._save_current_settings()
+                    
                     self.logger.info(f"{mixer} 믹서 연결 성공")
                 else:
                     self.view.show_message("연결 오류", "MIDI 모니터링 시작에 실패했습니다.", "error")
@@ -269,31 +271,11 @@ class MidiController:
                     self.view.update_virtual_port_status(self.midi_backend.virtual_port_name, False)
                     self.logger.warning("가상 MIDI 포트 생성 실패 - 시뮬레이션 모드로 실행")
                 
-                # 1) 저장된 설정 로드하여 View에 적용 (가능한 경우)
-                try:
-                    prefs = load_prefs()
-                    mixer = prefs.get("mixer")
-                    input_port = prefs.get("input_port")
-                    output_port = prefs.get("output_port")
-                    channel = prefs.get("channel")
-
-                    # Mixer 우선 적용
-                    if isinstance(mixer, str) and mixer:
-                        self.view.mixer_var.set(mixer)
-                        # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
-                        try:
-                            self._on_mixer_changed(mixer)
-                        except Exception:
-                            pass
-
-                    # 채널 적용 (유효 범위 체크는 view 검증에 맡김)
-                    if isinstance(channel, int) and channel:
-                        self.view.channel_var.set(str(channel))
-
-                    # Virtual ports are handled automatically, no need for port scanning
-                    # 가상 MIDI 포트 사용으로 포트 스캔 생략 (로그 제거)
-                except Exception as e:
-                    self.logger.warning(f"환경설정 로드 중 경고: {e}")
+                # 1) View 초기화 시점에서 이미 설정이 로드되므로 믹서 변경 콜백만 호출
+                # 믹서 타입이 로드된 경우 해당 믹서로 서비스 초기화
+                mixer = self.view.mixer_var.get()
+                if mixer in ["DM3", "Qu-5/6/7"]:
+                    self.view.root.after(100, lambda: self._on_mixer_changed(mixer))
 
                 # Initial port refresh must run on Tk main loop to avoid GIL issues
                 try:
@@ -325,22 +307,11 @@ class MidiController:
                 if self.is_monitoring:
                     self._on_disconnect()
                 
-                # 현재 설정 저장
+                # 앱 종료 시 현재 설정 저장 (연결 성공 여부와 관계없이)
                 try:
-                    params = self.view.get_connection_params()
-                    # channel은 int, 나머지는 str
-                    prefs = {
-                        "mixer": params.get("mixer"),
-                        "input_port": params.get("input_port"),
-                        "output_port": params.get("output_port"),
-                        "channel": params.get("channel"),
-                    }
-                    if not save_prefs(prefs):
-                        self.logger.warning("환경설정 저장 실패")
-                    else:
-                        self.logger.info("환경설정 저장 완료")
+                    self._save_current_settings()
                 except Exception as e:
-                    self.logger.warning(f"환경설정 저장 중 경고: {e}")
+                    self.logger.warning(f"종료 시 설정 저장 중 경고: {e}")
 
                 if self.dm3_service:
                     self.dm3_service.shutdown()
@@ -388,3 +359,87 @@ class MidiController:
         self._port_watcher_stop.set()
         if self._port_watcher_thread and self._port_watcher_thread.is_alive():
             self._port_watcher_thread.join(timeout=2.0)
+    
+    def _load_user_settings(self) -> None:
+        """GUI 초기화 후 저장된 사용자 설정을 로드하여 적용."""
+        try:
+            prefs = load_prefs()
+            
+            # 믹서 타입 로드 및 적용
+            mixer = prefs.get("mixer")
+            if isinstance(mixer, str) and mixer in ["DM3", "Qu-5/6/7"]:
+                self.view.mixer_var.set(mixer)
+                # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
+                self._on_mixer_changed(mixer)
+                self.logger.info(f"저장된 믹서 설정 복원: {mixer}")
+            
+            # MIDI 채널 로드 및 적용
+            midi_channel = prefs.get("midi_channel")
+            if isinstance(midi_channel, int) and 1 <= midi_channel <= 16:
+                self.view.midi_channel_var.set(str(midi_channel))
+                self.logger.info(f"저장된 MIDI 채널 복원: {midi_channel}")
+            
+            # DM3 설정 로드 및 적용
+            dm3_ip = prefs.get("dm3_ip")
+            dm3_port = prefs.get("dm3_port")
+            if isinstance(dm3_ip, str) and dm3_ip:
+                self.view.dm3_ip_var.set(dm3_ip)
+            if isinstance(dm3_port, int) and 1 <= dm3_port <= 65535:
+                self.view.dm3_port_var.set(str(dm3_port))
+            
+            # Qu-5/6/7 설정 로드 및 적용
+            qu5_ip = prefs.get("qu5_ip")
+            qu5_port = prefs.get("qu5_port")
+            qu5_channel = prefs.get("qu5_channel")
+            use_tcp_midi = prefs.get("use_tcp_midi")
+            
+            if isinstance(qu5_ip, str) and qu5_ip:
+                self.view.qu5_ip_var.set(qu5_ip)
+            if isinstance(qu5_port, int) and 1 <= qu5_port <= 65535:
+                self.view.qu5_port_var.set(str(qu5_port))
+            if isinstance(qu5_channel, int) and 1 <= qu5_channel <= 16:
+                self.view.qu5_channel_var.set(str(qu5_channel))
+            if isinstance(use_tcp_midi, bool):
+                self.view.use_tcp_midi_var.set(use_tcp_midi)
+            
+            self.logger.info("사용자 설정 로드 완료")
+            
+        except Exception as e:
+            self.logger.warning(f"사용자 설정 로드 중 경고: {e}")
+    
+    def _save_current_settings(self) -> None:
+        """연결 성공 시 현재 설정을 저장."""
+        try:
+            # GUI에서 현재 설정값 가져오기
+            mixer = self.view.mixer_var.get()
+            midi_channel = int(self.view.midi_channel_var.get())
+            
+            # 믹서별 IP 주소와 포트 설정 가져오기
+            mixer_params = self.view.get_mixer_connection_params()
+            
+            prefs = {
+                "mixer": mixer,
+                "midi_channel": midi_channel,
+            }
+            
+            # 믹서별 설정 추가
+            if mixer == "DM3":
+                prefs.update({
+                    "dm3_ip": mixer_params.get("dm3_ip", "192.168.4.2"),
+                    "dm3_port": mixer_params.get("dm3_port", 49900)
+                })
+            elif mixer == "Qu-5/6/7":
+                prefs.update({
+                    "qu5_ip": mixer_params.get("qu5_ip", "192.168.5.10"),
+                    "qu5_port": mixer_params.get("qu5_port", 51325),
+                    "qu5_channel": mixer_params.get("qu5_channel", 1),
+                    "use_tcp_midi": mixer_params.get("use_tcp_midi", True)
+                })
+            
+            if save_prefs(prefs):
+                self.logger.info("연결 성공 시 설정 저장 완료")
+            else:
+                self.logger.warning("연결 성공 시 설정 저장 실패")
+                
+        except Exception as e:
+            self.logger.warning(f"연결 성공 시 설정 저장 중 경고: {e}")

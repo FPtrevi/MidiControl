@@ -39,17 +39,17 @@ class MidiMixerView:
         self.on_mixer_changed_callback: Optional[Callable[[str], None]] = None
         self.update_callback: Optional[Callable[[], None]] = None
         
-        # GUI variables
-        self.mixer_var = tk.StringVar()
+        # GUI variables - load from preferences
+        prefs = load_prefs()
+        self.mixer_var = tk.StringVar(value=prefs.get("mixer", "DM3"))
         self.input_midi_var = tk.StringVar()
         self.channel_var = tk.StringVar(value=str(DEFAULT_MIDI_CHANNEL))
         self.output_midi_var = tk.StringVar()
         
         # MIDI channel for mixer control
-        self.midi_channel_var = tk.StringVar(value="1")
+        self.midi_channel_var = tk.StringVar(value=str(prefs.get("midi_channel", 1)))
         
         # Mixer connection parameters - load from preferences
-        prefs = load_prefs()
         self.dm3_ip_var = tk.StringVar(value=prefs.get("dm3_ip", DEFAULT_DM3_IP))
         self.dm3_port_var = tk.StringVar(value=str(prefs.get("dm3_port", DEFAULT_DM3_PORT)))
         self.qu5_ip_var = tk.StringVar(value=prefs.get("qu5_ip", DEFAULT_QU5_IP))
@@ -87,7 +87,15 @@ class MidiMixerView:
         
         self.mixer_dropdown = ttk.Combobox(mixer_frame, textvariable=self.mixer_var, state="readonly")
         self.mixer_dropdown['values'] = ["DM3", "Qu-5/6/7"]
-        self.mixer_dropdown.current(0)
+        
+        # 저장된 믹서 타입에 따라 올바른 인덱스 선택
+        mixer_values = ["DM3", "Qu-5/6/7"]
+        current_mixer = self.mixer_var.get()
+        if current_mixer in mixer_values:
+            self.mixer_dropdown.current(mixer_values.index(current_mixer))
+        else:
+            self.mixer_dropdown.current(0)  # 기본값
+        
         self.mixer_dropdown.bind('<<ComboboxSelected>>', self._on_mixer_selected)
         self.mixer_dropdown.pack()
         
@@ -183,9 +191,7 @@ class MidiMixerView:
         if not self._validate_connection_params():
             return
         
-        # Save current IP settings to preferences
-        self._save_connection_prefs()
-        
+        # 연결 성공 시에만 설정 저장 (연결 버튼 클릭 시에는 저장하지 않음)
         if self.on_connect_callback:
             self.on_connect_callback()
     
@@ -227,16 +233,6 @@ class MidiMixerView:
         
         return True
     
-    def _save_connection_prefs(self) -> None:
-        """Save current connection settings to preferences."""
-        prefs = load_prefs()
-        prefs["dm3_ip"] = self.dm3_ip_var.get()
-        prefs["dm3_port"] = int(self.dm3_port_var.get())
-        prefs["qu5_ip"] = self.qu5_ip_var.get()
-        prefs["qu5_port"] = int(self.qu5_port_var.get())
-        prefs["qu5_channel"] = int(self.qu5_channel_var.get())
-        prefs["use_tcp_midi"] = self.use_tcp_midi_var.get()
-        save_prefs(prefs)
     
     def _set_connection_frame_state(self, state: str) -> None:
         """Enable/disable all widgets in connection frame."""
