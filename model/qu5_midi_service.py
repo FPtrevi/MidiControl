@@ -161,15 +161,22 @@ class Qu5MIDIService(BaseMidiService):
                 return False
             
             try:
+                # Prepare raw bytes and hex dump for logging
+                midi_bytes = bytes(message.bytes())
+                hex_dump = ' '.join(f"{b:02X}" for b in midi_bytes)
+                
                 if self.use_tcp_midi and self.qu5_socket:
                     # TCP/IP MIDI transmission
-                    midi_bytes = bytes(message.bytes())
                     self.qu5_socket.send(midi_bytes)
-                    self.logger.debug(f"Qu-5 TCP/IP MIDI 전송: {message}")
+                    self.logger.info(
+                        f"➡️ [TX][TCP] type={message.type} ch={getattr(message, 'channel', 'n/a')} data=[{hex_dump}]"
+                    )
                     return True
                 else:
                     # USB MIDI transmission would go here
-                    self.logger.debug(f"Qu-5 USB MIDI 전송: {message}")
+                    self.logger.info(
+                        f"➡️ [TX][USB] type={message.type} ch={getattr(message, 'channel', 'n/a')} data=[{hex_dump}]"
+                    )
                     return True
                     
             except Exception as e:
@@ -178,42 +185,83 @@ class Qu5MIDIService(BaseMidiService):
                 self.qu5_connected = False
                 return False
     
-    def handle_mute(self, note: int, velocity: int, channel: int) -> None:
+    def handle_mute(self, note: int, velocity: int, channel: int, mixer_midi_channel: int = None) -> None:
         """Handle mute control for Qu-5 using NRPN."""
         if not self.qu5_connected:
             return
         
+        # Use provided MIDI channel or fall back to configured one
+        midi_channel = mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel
+        
         # Qu-5 mute control: note represents channel number (0-based)
+        # Note 0-15 represents mixer channels 1-16
+        if note < 0 or note > 15:
+            self.logger.warning(f"⚠️ 잘못된 채널 번호: {note} (0-15 범위여야 함)")
+            return
+            
         channel_num = note + 1  # Convert to 1-based channel number
         mute_on_off = 1 if velocity >= 1 else 0
         
-        self.send_nrpn_mute_sequence(channel_num, mute_on_off)
+        self.logger.info(f"🔇 Qu-5 뮤트 제어: 채널 {channel_num}, 뮤트: {mute_on_off}, MIDI 채널: {midi_channel}")
+        self.send_nrpn_mute_sequence(channel_num, mute_on_off, midi_channel)
     
-    def handle_scene(self, note: int, channel: int) -> None:
+    def handle_scene(self, note: int, channel: int, mixer_midi_channel: int = None) -> None:
         """Handle scene recall for Qu-5."""
         if not self.qu5_connected:
             return
         
-        # Qu-5 scene recall: note represents scene number (0-based)
-        scene_number = note + 1  # Convert to 1-based scene number
-        self.recall_scene_by_number(scene_number)
+        # Use provided MIDI channel or fall back to configured one
+        midi_channel = mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel
+        
+        # Qu-5 scene recall: note represents scene number (0-based from source)
+        if note < 0 or note > 99:  # Qu-5 supports up to 100 scenes
+            self.logger.warning(f"⚠️ 잘못된 씬 번호: {note} (0-99 범위여야 함)")
+            return
+            
+        # Note 0 -> Scene 1, Note 1 -> Scene 2 ... (+1 offset required by mixer)
+        scene_number = note + 1
+        self.logger.info(f"🎬 Qu-5 씬 리콜: {scene_number}번 씬, MIDI 채널: {midi_channel}")
+        self.recall_scene_by_number(scene_number, midi_channel)
     
-    def send_nrpn_mute_sequence(self, channel_num: int, mute_value: int) -> None:
+    def handle_softkey(self, note: int, channel: int, mixer_midi_channel: int = None) -> None:
+        """Handle soft key control for Qu-5."""
+        if not self.qu5_connected:
+            return
+        
+        # Use provided MIDI channel or fall back to configured one
+        midi_channel = mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel
+        
+        # Qu-5 soft key control: note represents soft key number (0-based)
+        if note < 0 or note > 7:  # Qu-5 has 8 soft keys
+            self.logger.warning(f"⚠️ 잘못된 소프트키 번호: {note} (0-7 범위여야 함)")
+            return
+            
+        # Note 0-7 directly corresponds to soft key 0-7 (0-based)
+        softkey_number = note  # Keep as 0-based for Qu-5
+        self.logger.info(f"🔘 Qu-5 소프트키 제어: {softkey_number}번 소프트키 (0-based), MIDI 채널: {midi_channel}")
+        self.send_softkey_command(softkey_number, midi_channel)
+    
+    def send_nrpn_mute_sequence(self, channel_num: int, mute_value: int, mixer_midi_channel: int = None) -> None:
         """Send NRPN mute sequence to Qu-5."""
         try:
-            midi_channel = self.qu5_midi_channel - 1  # Convert to 0-based MIDI channel
+            # Use provided MIDI channel or fall back to configured one
+            midi_channel = (mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel) - 1  # Convert to 0-based MIDI channel
             
-            # NRPN mute sequence:
-            # CC 99 = 0 (MSB)
-            # CC 98 = 0 (LSB) 
-            # CC 6 = 0 (Data Entry MSB)
-            # CC 38 = mute_value (1=mute, 0=unmute)
+            self.logger.info(
+                f"🧩 NRPN 뮤트 시퀀스 시작: target_ch={channel_num} (midi_ch={midi_channel+1}), mute={mute_value}"
+            )
+            
+            # Qu-5 NRPN mute sequence for specific channel:
+            # CC 99 = 0 (MSB) - NRPN parameter number MSB
+            # CC 98 = channel_num-1 (LSB) - Channel number (0-based)
+            # CC 6 = 0 (Data Entry MSB) - Mute parameter
+            # CC 38 = mute_value (1=mute, 0=unmute) - Mute value
             
             sequence: List[Tuple[str, int, int, int]] = [
-                ('control_change', 99, 0, midi_channel),
-                ('control_change', 98, 0, midi_channel),
-                ('control_change', 6, 0, midi_channel),
-                ('control_change', 38, mute_value, midi_channel)
+                ('control_change', 99, 0, midi_channel),           # NRPN MSB = 0
+                ('control_change', 98, channel_num - 1, midi_channel),  # Channel number (0-based)
+                ('control_change', 6, 0, midi_channel),            # Data Entry MSB = 0
+                ('control_change', 38, mute_value, midi_channel)   # Mute value
             ]
             
             for msg_type, control, value, ch in sequence:
@@ -221,19 +269,60 @@ class Qu5MIDIService(BaseMidiService):
                 if not self.send_midi_message(msg):
                     self.logger.error(f"NRPN CC#{control} 전송 실패")
                     return
+                # Small delay between messages for proper sequencing
+                time.sleep(0.01)
             
             action = "뮤트" if mute_value else "뮤트 해제"
-            self.logger.info(f"🔇 Qu-5 {channel_num}번 채널 {action}")
+            self.logger.info(f"🔇 Qu-5 {channel_num}번 채널 {action} 완료")
             
         except Exception as e:
             self.logger.error(f"❌ Qu-5 NRPN 뮤트 시퀀스 실패: {e}")
     
-    def recall_scene_by_number(self, scene_number: int) -> None:
-        """Recall scene by number on Qu-5."""
+    def send_softkey_command(self, softkey_number: int, mixer_midi_channel: int = None) -> None:
+        """Send soft key command to Qu-5 using Note On/Off (notes start at 0x30)."""
         try:
-            # Qu-5 scene recall would use specific MIDI messages
-            # This is a placeholder implementation
-            self.logger.info(f"🎬 Qu-5 씬 리콜: {scene_number}번 씬 (구현 필요)")
+            # Use provided MIDI channel or fall back to configured one
+            midi_channel = (mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel) - 1  # Convert to 0-based MIDI channel
+            
+            self.logger.info(
+                f"🔘 소프트키 트리거 시작: softkey_index={softkey_number} (0-based), midi_ch={midi_channel+1}"
+            )
+            
+            # Qu-5 soft key control uses Note On/Off with notes starting at 0x30 for SoftKey 1
+            # softkey_number is 0-based from input; compute MIDI note number:
+            midi_note = 0x30 + softkey_number
+            
+            note_on = mido.Message('note_on', channel=midi_channel, note=midi_note, velocity=127)
+            note_off = mido.Message('note_off', channel=midi_channel, note=midi_note, velocity=0)
+            
+            ok_on = self.send_midi_message(note_on)
+            time.sleep(0.02)
+            ok_off = self.send_midi_message(note_off)
+            
+            if ok_on and ok_off:
+                self.logger.info(f"🔘 Qu-5 소프트키 트리거 완료: idx={softkey_number}, note=0x{midi_note:02X}")
+            else:
+                self.logger.error("❌ Qu-5 소프트키 Note On/Off 전송 실패")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Qu-5 소프트키 명령 실패: {e}")
+    
+    def recall_scene_by_number(self, scene_number: int, mixer_midi_channel: int = None) -> None:
+        """Recall scene by number on Qu-5 using Program Change only."""
+        try:
+            # Use provided MIDI channel or fall back to configured one
+            midi_channel = (mixer_midi_channel if mixer_midi_channel is not None else self.qu5_midi_channel) - 1  # Convert to 0-based MIDI channel
+            
+            self.logger.info(
+                f"🎬 씬 리콜 시작: scene={scene_number}, midi_ch={midi_channel+1} (Program Change)"
+            )
+            
+            # Scene recall via Program Change: program is (scene_number - 1)
+            program_msg = mido.Message('program_change', channel=midi_channel, program=max(0, scene_number - 1))
+            if self.send_midi_message(program_msg):
+                self.logger.info(f"🎬 Qu-5 {scene_number}번 씬 리콜 완료 (PC={scene_number - 1})")
+            else:
+                self.logger.error("❌ Program Change 전송 실패")
             
         except Exception as e:
             self.logger.error(f"❌ Qu-5 씬 리콜 실패: {e}")

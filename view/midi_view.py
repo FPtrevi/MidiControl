@@ -43,6 +43,9 @@ class MidiMixerView:
         self.channel_var = tk.StringVar(value=str(DEFAULT_MIDI_CHANNEL))
         self.output_midi_var = tk.StringVar()
         
+        # MIDI channel for mixer control
+        self.midi_channel_var = tk.StringVar(value="1")
+        
         # Mixer connection parameters
         self.dm3_ip_var = tk.StringVar(value="192.168.4.2")
         self.dm3_port_var = tk.StringVar(value="49900")
@@ -106,6 +109,17 @@ class MidiMixerView:
         ttk.Entry(self.qu5_frame, textvariable=self.qu5_channel_var, width=5).grid(row=0, column=5, padx=(0, 10))
         
         ttk.Checkbutton(self.qu5_frame, text="TCP/IP MIDI", variable=self.use_tcp_midi_var).grid(row=0, column=6)
+        
+        # MIDI Channel settings
+        midi_channel_frame = ttk.LabelFrame(main_container, text="MIDI 채널 설정", padding="5")
+        midi_channel_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(midi_channel_frame, text="믹서 MIDI 채널:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        midi_channel_spinbox = ttk.Spinbox(midi_channel_frame, from_=1, to=16, textvariable=self.midi_channel_var, width=5)
+        midi_channel_spinbox.grid(row=0, column=1, padx=(0, 10))
+        
+        ttk.Label(midi_channel_frame, text="(1-16, 믹서로 전송되는 MIDI 메시지의 채널)", 
+                 font=("TkDefaultFont", 8)).grid(row=0, column=2, sticky="w")
         
         # Virtual MIDI info
         virtual_frame = ttk.LabelFrame(main_container, text="가상 MIDI 포트", padding="5")
@@ -304,7 +318,8 @@ class MidiMixerView:
             "mixer": self.mixer_var.get(),
             "input_port": self.input_midi_var.get(),
             "output_port": self.output_midi_var.get(),
-            "channel": int(self.channel_var.get())
+            "channel": int(self.channel_var.get()),
+            "midi_channel": int(self.midi_channel_var.get())
         }
     
     def get_mixer_connection_params(self) -> Dict[str, Any]:

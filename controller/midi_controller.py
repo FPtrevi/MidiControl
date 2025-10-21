@@ -199,28 +199,37 @@ class MidiController:
             if message.type not in [NOTE_ON_TYPE, NOTE_OFF_TYPE]:
                 return
             
-            # Get mixer type from view
+            # Get mixer type and MIDI channel from view
             params = self.view.get_connection_params()
             mixer = params["mixer"]
+            mixer_midi_channel = params["midi_channel"]
             
             # Route message based on channel and mixer type
-            if message.channel == 1:
+            # Channel 0 = Soft key control, Channel 1 = Scene recall, Channel 2 = Mute control
+            if message.channel == 0:
+                # Soft key control (for Qu-5/6/7)
+                if message.type == NOTE_ON_TYPE and message.velocity > 0:
+                    if mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
+                        self.qu5_service.handle_softkey(message.note, message.channel, mixer_midi_channel)
+                        
+            elif message.channel == 1:
                 # Scene recall
                 if message.type == NOTE_ON_TYPE and message.velocity > 0:
                     if mixer == "DM3" and self.dm3_service:
-                        self.dm3_service.handle_scene(message.note, 0)
+                        self.dm3_service.handle_scene(message.note, message.channel)
                     elif mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
-                        self.qu5_service.handle_scene(message.note, 0)
+                        self.qu5_service.handle_scene(message.note, message.channel, mixer_midi_channel)
                         
             elif message.channel == 2:
                 # Mute control
                 effective_velocity = message.velocity if message.type == NOTE_ON_TYPE else 0
                 if mixer == "DM3" and self.dm3_service:
-                    self.dm3_service.handle_mute(message.note, effective_velocity, 0)
+                    self.dm3_service.handle_mute(message.note, effective_velocity, message.channel)
                 elif mixer in ["Qu-5", "Qu-6", "Qu-7"] and self.qu5_service:
-                    self.qu5_service.handle_mute(message.note, effective_velocity, 0)
+                    self.qu5_service.handle_mute(message.note, effective_velocity, message.channel, mixer_midi_channel)
+                        
             else:
-                self.view.append_log(f"ℹ️ 처리하지 않는 채널: {message.channel} (채널 1,2만 처리)")
+                self.view.append_log(f"ℹ️ 처리하지 않는 채널: {message.channel} (채널 0,1,2만 처리)")
                 
         except Exception as e:
             self.logger.error(f"MIDI 메시지 처리 오류: {e}")
