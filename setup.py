@@ -9,7 +9,7 @@ DATA_FILES = []
 # Optimized py2app options for better performance and smaller bundle size
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['mido', 'rtmidi', 'tkinter', 'pythonosc'],
+    'packages': ['mido', 'rtmidi', 'tkinter', 'pythonosc', 'packaging'],
     'includes': [
         'controller',
         'model',
@@ -31,8 +31,8 @@ OPTIONS = {
         # Development tools
         'black', 'mypy', 'flake8', 'pylint',
         # Other unnecessary modules
-        'email', 'http', 'urllib', 'xml', 'html',
-        'multiprocessing', 'concurrent', 'asyncio',
+        'http', 'html', 'setuptools', 'extern', 'vendor', 'helpers', 'distutils', 'wheel', 'pip', 'ensurepip', 'importlib_metadata', 'site', 'pkg_resources',
+        'concurrent', 'asyncio',
     ],
     'plist': {
         'CFBundleName': 'MIDI Mixer Control',
@@ -55,7 +55,6 @@ OPTIONS = {
     'optimize': 2,  # Python 최적화 레벨
     'strip': True,  # 디버그 심볼 제거
     'compressed': True,  # 압축된 번들 생성
-    'bundle_files': 1,  # 단일 실행 파일로 번들링
     'dist_dir': 'dist',  # 배포 디렉토리
 }
 
