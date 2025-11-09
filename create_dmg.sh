@@ -4,7 +4,7 @@
 set -e
 
 echo "======================================"
-echo "MIDI Mixer Control - DMG 생성"
+echo "D-ConPro - DMG 생성"
 echo "======================================"
 echo ""
 
@@ -15,22 +15,26 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 # 앱 확인
-if [ ! -d "dist/MIDI Mixer Control.app" ]; then
+APP_BUNDLE="dist/D-ConPro.app"
+
+if [ ! -d "$APP_BUNDLE" ]; then
     echo -e "${RED}✗ 앱을 먼저 빌드해주세요: ./build_app.sh${NC}"
     exit 1
 fi
 
 # 버전 정보
-VERSION="1.0.0"
-DMG_NAME="MIDI-Mixer-Control-${VERSION}.dmg"
+VERSION="1.0.1"
+DMG_NAME="D-ConPro-${VERSION}.dmg"
+VOL_NAME="D-ConPro"
 
 echo -e "${YELLOW}[1/4] 임시 DMG 폴더 생성...${NC}"
 TEMP_DIR="temp_dmg"
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 
-# 앱 복사
-cp -r "dist/MIDI Mixer Control.app" "$TEMP_DIR/"
+# 앱 복사 (심볼릭 링크/권한 포함)
+mkdir -p "$TEMP_DIR/D-ConPro.app"
+rsync -a "$APP_BUNDLE/" "$TEMP_DIR/D-ConPro.app/"
 echo -e "${GREEN}✓ 앱 복사 완료${NC}"
 
 echo -e "${YELLOW}[2/4] Applications 심볼릭 링크 생성...${NC}"
@@ -47,19 +51,19 @@ fi
 if command -v create-dmg &> /dev/null; then
     # create-dmg 사용 (더 예쁜 DMG)
     create-dmg \
-        --volname "MIDI Mixer Control" \
+        --volname "$VOL_NAME" \
         --volicon "icon.icns" \
         --window-pos 200 120 \
         --window-size 600 400 \
         --icon-size 100 \
-        --icon "MIDI Mixer Control.app" 175 120 \
-        --hide-extension "MIDI Mixer Control.app" \
+        --icon "D-ConPro.app" 175 120 \
+        --hide-extension "D-ConPro.app" \
         --app-drop-link 425 120 \
         "$DMG_NAME" \
         "$TEMP_DIR" || {
             # create-dmg 실패 시 hdiutil 사용
             echo -e "${YELLOW}create-dmg 실패, hdiutil 사용...${NC}"
-            hdiutil create -volname "MIDI Mixer Control" \
+            hdiutil create -volname "$VOL_NAME" \
                 -srcfolder "$TEMP_DIR" \
                 -ov -format UDZO \
                 "$DMG_NAME"
@@ -69,7 +73,7 @@ else
     echo -e "${YELLOW}create-dmg가 없습니다. 기본 DMG 생성 중...${NC}"
     echo "더 예쁜 DMG를 원하시면: brew install create-dmg"
     
-    hdiutil create -volname "MIDI Mixer Control" \
+    hdiutil create -volname "$VOL_NAME" \
         -srcfolder "$TEMP_DIR" \
         -ov -format UDZO \
         "$DMG_NAME"
@@ -98,9 +102,13 @@ echo "사용자는 DMG를 열고 앱을 Applications 폴더로 드래그하면 �
 echo ""
 
 # DMG 열기 옵션
-read -p "지금 DMG를 열어보시겠습니까? (y/n): " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    open "$DMG_NAME"
+if [ -t 0 ]; then
+    read -p "지금 DMG를 열어보시겠습니까? (y/n): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        open "$DMG_NAME"
+    fi
+else
+    echo "비대화식 환경이므로 DMG를 자동으로 열지 않습니다."
 fi
 

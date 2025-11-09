@@ -9,13 +9,24 @@ DATA_FILES = []
 # Optimized py2app options for better performance and smaller bundle size
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['mido', 'rtmidi', 'tkinter', 'pythonosc', 'packaging'],
+    'packages': [
+        'mido',
+        'rtmidi',
+        'tkinter',
+        'pythonosc',
+        'packaging',
+        'pyparsing',
+        'pkg_resources',
+        'pkg_resources._vendor',
+        'pkg_resources.extern',
+    ],
     'includes': [
         'controller',
         'model',
         'view',
         'config',
         'utils',
+        'pkg_resources.extern.pyparsing',
     ],
     'excludes': [
         # Scientific computing libraries
@@ -31,13 +42,13 @@ OPTIONS = {
         # Development tools
         'black', 'mypy', 'flake8', 'pylint',
         # Other unnecessary modules
-        'http', 'html', 'setuptools', 'extern', 'vendor', 'helpers', 'distutils', 'wheel', 'pip', 'ensurepip', 'importlib_metadata', 'site', 'pkg_resources',
-        'concurrent', 'asyncio',
+        'http', 'html', 'helpers', 'distutils', 'wheel', 'pip', 'ensurepip',
+        'importlib_metadata', 'site', 'concurrent', 'asyncio',
     ],
     'plist': {
-        'CFBundleName': 'MIDI Mixer Control',
-        'CFBundleDisplayName': 'MIDI Mixer Control',
-        'CFBundleIdentifier': 'com.mcontrol.midimixer',
+        'CFBundleName': 'D-ConPro',
+        'CFBundleDisplayName': 'D-ConPro',
+        'CFBundleIdentifier': 'com.dconpro.midimixer',
         'CFBundleVersion': '1.0.1',
         'CFBundleShortVersionString': '1.0.1',
         'NSHumanReadableCopyright': 'Copyright © 2025 All Rights Reserved',
@@ -50,7 +61,7 @@ OPTIONS = {
         'LSUIElement': False,  # Show in dock
         'NSRequiresAquaSystemAppearance': False,
     },
-    'iconfile': None,  # 아이콘 파일이 있다면 경로 지정 (예: 'icon.icns')
+    'iconfile': 'icon.icns',  # 아이콘 파일 경로 지정
     'resources': [],
     'optimize': 2,  # Python 최적화 레벨
     'strip': True,  # 디버그 심볼 제거
@@ -59,9 +70,9 @@ OPTIONS = {
 }
 
 setup(
-    name='MIDI Mixer Control',
+    name='D-ConPro',
     version='1.0.1',
-    description='MIDI mixer control application for DM3 and Qu-5/6/7 mixers',
+    description='D-ConPro - MIDI mixer control application for DM3 and Qu-5/6/7 mixers',
     author='MControl',
     author_email='',
     url='',

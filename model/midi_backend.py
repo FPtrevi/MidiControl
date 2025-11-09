@@ -14,12 +14,9 @@ from utils.logger import get_logger
 # Try to import rtmidi, fallback to simulation if not available
 try:
     import rtmidi
-    print("✅ rtmidi 모듈 import 성공")
     # Test if rtmidi actually works (architecture compatibility check)
     test_out = rtmidi.MidiOut()
-    print("✅ rtmidi.MidiOut() 생성 성공")
     test_out.close_port()
-    print("✅ rtmidi 포트 닫기 성공")
     del test_out
     RTMIDI_AVAILABLE = True
     print("✅ rtmidi 패키지가 정상적으로 로드되었습니다.")
@@ -27,29 +24,6 @@ except (ImportError, Exception) as e:
     RTMIDI_AVAILABLE = False
     print(f"⚠️ rtmidi 패키지를 사용할 수 없습니다: {e}")
     print("가상 MIDI 포트 기능이 시뮬레이션 모드로 실행됩니다.")
-    import traceback
-    traceback.print_exc()
-    
-    # 로그 파일에도 기록
-    try:
-        import logging
-        logger = logging.getLogger('rtmidi_debug')
-        if not logger.handlers:
-            import os
-            from datetime import datetime
-            log_file = os.path.expanduser(f"~/Desktop/rtmidi_debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-            handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.DEBUG)
-        
-        logger.error(f"rtmidi 초기화 실패: {e}")
-        logger.error("상세 에러 정보:")
-        logger.error(traceback.format_exc())
-        print(f"📝 상세 로그 파일 생성: {log_file}")
-    except Exception as log_error:
-        print(f"⚠️ 로그 파일 생성 실패: {log_error}")
 
 
 class MidiBackend:
@@ -135,16 +109,12 @@ class MidiBackend:
                         self.virtual_midi_in = rtmidi.MidiIn()
                         self.virtual_midi_in.open_virtual_port(f"{self.virtual_port_name} In")
                         self.virtual_midi_in.set_callback(self._virtual_midi_callback)
-                        self.logger.info(f"가상 입력 포트 생성: '{self.virtual_port_name} In'")
-                        
-                        # Verify ports were created
-                        available_ports = self.virtual_midi_out.get_ports()
-                        self.logger.info(f"현재 사용 가능한 MIDI 포트: {available_ports}")
+                        # 가상 입력 포트 생성 (로그 제거)
                         
                         with self._thread_lock:
                             self.virtual_port_active = True
-                        self.logger.info(f"가상 MIDI 포트 생성 완료: '{self.virtual_port_name}'")
-                        self.logger.info("프로프리젠터에서 가상 MIDI 포트를 선택하세요!")
+                        # 가상 MIDI 포트 생성 완료 (로그 제거)
+                        # 프로프리젠터에서 가상 MIDI 포트를 선택하세요! (로그 제거)
                         
                     except Exception as e:
                         self.logger.error(f"가상 MIDI 포트 생성 실패: {e}")

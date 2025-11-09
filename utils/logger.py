@@ -3,8 +3,6 @@ Logging utilities with thread-safe considerations.
 """
 import logging
 import threading
-import os
-from datetime import datetime
 from typing import Optional, Dict, Any
 from config.settings import LOG_LEVEL, LOG_FORMAT
 
@@ -23,23 +21,10 @@ class ThreadSafeLogger:
         
         # Avoid duplicate handlers
         if not self._logger.handlers:
-            # Console handler
-            console_handler = logging.StreamHandler()
+            handler = logging.StreamHandler()
             formatter = logging.Formatter(LOG_FORMAT)
-            console_handler.setFormatter(formatter)
-            self._logger.addHandler(console_handler)
-            
-            # File handler for debugging
-            try:
-                log_dir = os.path.expanduser("~/Desktop")
-                log_file = os.path.join(log_dir, f"MIDI_Mixer_Control_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-                file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-                file_handler.setFormatter(formatter)
-                self._logger.addHandler(file_handler)
-                print(f"📝 로그 파일 생성: {log_file}")
-            except Exception as e:
-                print(f"⚠️ 로그 파일 생성 실패: {e}")
-            
+            handler.setFormatter(formatter)
+            self._logger.addHandler(handler)
             self._initialized = True
     
     def info(self, message: str) -> None:

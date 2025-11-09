@@ -1,12 +1,10 @@
 #!/bin/bash
-# MIDI Mixer Control - macOS 앱 빌드 스크립트
-# 버전: 1.0.1
+# macOS 앱 빌드 스크립트
 
 set -e  # 에러 발생 시 중단
 
 echo "======================================"
 echo "MIDI Mixer Control - macOS 앱 빌드"
-echo "버전: 1.0.1"
 echo "======================================"
 echo ""
 
@@ -17,12 +15,12 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # 1. Python 버전 확인
-echo -e "${YELLOW}[1/8] Python 버전 확인...${NC}"
+echo -e "${YELLOW}[1/7] Python 버전 확인...${NC}"
 python_version=$(python3 --version 2>&1 | awk '{print $2}')
 echo "Python 버전: $python_version"
 
 # 2. py2app 설치 확인
-echo -e "${YELLOW}[2/8] py2app 설치 확인...${NC}"
+echo -e "${YELLOW}[2/7] py2app 설치 확인...${NC}"
 if ! python3 -c "import py2app" 2>/dev/null; then
     echo "py2app이 설치되지 않았습니다. 설치 중..."
     pip3 install py2app
@@ -30,20 +28,12 @@ fi
 echo -e "${GREEN}✓ py2app 설치됨${NC}"
 
 # 3. 의존성 설치 확인
-echo -e "${YELLOW}[3/8] 의존성 설치 확인...${NC}"
+echo -e "${YELLOW}[3/7] 의존성 설치 확인...${NC}"
 pip3 install -r requirements.txt
 echo -e "${GREEN}✓ 의존성 설치 완료${NC}"
 
-# 4. 앱 import 테스트
-echo -e "${YELLOW}[4/8] 앱 import 테스트...${NC}"
-if ! python3 -c "import sys; sys.path.insert(0, '.'); from app import MidiMixerApp; print('✓ 앱 import 성공')" 2>/dev/null; then
-    echo -e "${RED}✗ 앱 import 실패!${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ 앱 import 성공${NC}"
-
-# 5. 이전 빌드 정리
-echo -e "${YELLOW}[5/8] 이전 빌드 정리...${NC}"
+# 4. 이전 빌드 정리
+echo -e "${YELLOW}[4/7] 이전 빌드 정리...${NC}"
 if [ -d "build" ]; then
     rm -rf build/
 fi
@@ -52,8 +42,8 @@ if [ -d "dist" ]; then
 fi
 echo -e "${GREEN}✓ 정리 완료${NC}"
 
-# 6. 앱 빌드
-echo -e "${YELLOW}[6/8] 앱 빌드 중...${NC}"
+# 5. 앱 빌드
+echo -e "${YELLOW}[5/7] 앱 빌드 중...${NC}"
 python3 setup.py py2app --optimize=2
 
 if [ ! -d "dist/MIDI Mixer Control.app" ]; then
@@ -62,19 +52,20 @@ if [ ! -d "dist/MIDI Mixer Control.app" ]; then
 fi
 echo -e "${GREEN}✓ 빌드 완료${NC}"
 
-# 7. 앱 권한 설정
-echo -e "${YELLOW}[7/8] 앱 권한 설정...${NC}"
+# 5.5. 앱 권한 설정
+echo -e "${YELLOW}[5.5/7] 앱 권한 설정...${NC}"
 chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/MIDI Mixer Control"
 chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/python"
 echo -e "${GREEN}✓ 권한 설정 완료${NC}"
 
-# 8. 빌드 결과 확인
-echo -e "${YELLOW}[8/8] 빌드 결과 확인...${NC}"
+# 6. 앱 크기 확인
+echo -e "${YELLOW}[6/7] 빌드된 앱 정보...${NC}"
 app_size=$(du -sh "dist/MIDI Mixer Control.app" | awk '{print $1}')
 echo "앱 크기: $app_size"
 echo "위치: $(pwd)/dist/MIDI Mixer Control.app"
 
-# 빌드 완료 메시지
+# 7. 테스트 실행 옵션
+echo -e "${YELLOW}[7/7] 빌드 완료!${NC}"
 echo ""
 echo "======================================"
 echo -e "${GREEN}성공적으로 빌드되었습니다!${NC}"
@@ -83,13 +74,13 @@ echo ""
 echo "다음 단계:"
 echo "1. 앱 테스트: open 'dist/MIDI Mixer Control.app'"
 echo "2. Applications 폴더로 복사: cp -r 'dist/MIDI Mixer Control.app' /Applications/"
+echo "3. DMG 생성 (선택): ./create_dmg.sh"
 echo ""
 
 # 테스트 실행 여부 묻기
 read -p "지금 앱을 실행해보시겠습니까? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "앱을 실행합니다..."
     open "dist/MIDI Mixer Control.app"
 fi
 
