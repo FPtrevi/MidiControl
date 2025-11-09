@@ -4,7 +4,7 @@
 set -e  # 에러 발생 시 중단
 
 echo "======================================"
-echo "MIDI Mixer Control - macOS 앱 빌드"
+echo "Dconpro - macOS 앱 빌드"
 echo "======================================"
 echo ""
 
@@ -46,7 +46,9 @@ echo -e "${GREEN}✓ 정리 완료${NC}"
 echo -e "${YELLOW}[5/7] 앱 빌드 중...${NC}"
 python3 setup.py py2app --optimize=2
 
-if [ ! -d "dist/MIDI Mixer Control.app" ]; then
+APP_BUNDLE="dist/Dconpro.app"
+
+if [ ! -d "$APP_BUNDLE" ]; then
     echo -e "${RED}✗ 빌드 실패!${NC}"
     exit 1
 fi
@@ -54,15 +56,15 @@ echo -e "${GREEN}✓ 빌드 완료${NC}"
 
 # 5.5. 앱 권한 설정
 echo -e "${YELLOW}[5.5/7] 앱 권한 설정...${NC}"
-chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/MIDI Mixer Control"
-chmod +x "dist/MIDI Mixer Control.app/Contents/MacOS/python"
+chmod +x "$APP_BUNDLE/Contents/MacOS/Dconpro"
+chmod +x "$APP_BUNDLE/Contents/MacOS/python"
 echo -e "${GREEN}✓ 권한 설정 완료${NC}"
 
 # 6. 앱 크기 확인
 echo -e "${YELLOW}[6/7] 빌드된 앱 정보...${NC}"
-app_size=$(du -sh "dist/MIDI Mixer Control.app" | awk '{print $1}')
+app_size=$(du -sh "$APP_BUNDLE" | awk '{print $1}')
 echo "앱 크기: $app_size"
-echo "위치: $(pwd)/dist/MIDI Mixer Control.app"
+echo "위치: $(pwd)/$APP_BUNDLE"
 
 # 7. 테스트 실행 옵션
 echo -e "${YELLOW}[7/7] 빌드 완료!${NC}"
@@ -72,8 +74,8 @@ echo -e "${GREEN}성공적으로 빌드되었습니다!${NC}"
 echo "======================================"
 echo ""
 echo "다음 단계:"
-echo "1. 앱 테스트: open 'dist/MIDI Mixer Control.app'"
-echo "2. Applications 폴더로 복사: cp -r 'dist/MIDI Mixer Control.app' /Applications/"
+echo "1. 앱 테스트: open '$APP_BUNDLE'"
+echo "2. Applications 폴더로 복사: cp -r '$APP_BUNDLE' /Applications/"
 echo "3. DMG 생성 (선택): ./create_dmg.sh"
 echo ""
 
@@ -81,6 +83,6 @@ echo ""
 read -p "지금 앱을 실행해보시겠습니까? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    open "dist/MIDI Mixer Control.app"
+    open "$APP_BUNDLE"
 fi
 

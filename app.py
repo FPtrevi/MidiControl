@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main entry point for D-ConPro application.
+Main entry point for Dconpro application.
 MVC-based architecture with GIL-safe threading for macOS + mido environment.
 """
 import sys
@@ -34,7 +34,7 @@ class MidiMixerApp:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
-        self.logger.info("D-ConPro 애플리케이션 초기화")
+        self.logger.info("Dconpro 애플리케이션 초기화")
     
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully."""
@@ -107,7 +107,7 @@ class MidiMixerApp:
 
 def main() -> int:
     """Main entry point."""
-    print("D-ConPro v1.0.1")
+    print("Dconpro v1.0.1")
     print("=" * 50)
     
     # Check Python version

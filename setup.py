@@ -46,8 +46,8 @@ OPTIONS = {
         'importlib_metadata', 'site', 'concurrent', 'asyncio',
     ],
     'plist': {
-        'CFBundleName': 'D-ConPro',
-        'CFBundleDisplayName': 'D-ConPro',
+        'CFBundleName': 'Dconpro',
+        'CFBundleDisplayName': 'Dconpro',
         'CFBundleIdentifier': 'com.dconpro.midimixer',
         'CFBundleVersion': '1.0.1',
         'CFBundleShortVersionString': '1.0.1',
@@ -70,9 +70,9 @@ OPTIONS = {
 }
 
 setup(
-    name='D-ConPro',
+    name='Dconpro',
     version='1.0.1',
-    description='D-ConPro - MIDI mixer control application for DM3 and Qu-5/6/7 mixers',
+    description='Dconpro - MIDI mixer control application for DM3 and Qu-5/6/7 mixers',
     author='MControl',
     author_email='',
     url='',

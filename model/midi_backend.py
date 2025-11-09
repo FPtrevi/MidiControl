@@ -38,7 +38,7 @@ class MidiBackend:
         # Virtual MIDI ports (rtmidi)
         self.virtual_midi_out: Optional[rtmidi.MidiOut] = None
         self.virtual_midi_in: Optional[rtmidi.MidiIn] = None
-        self.virtual_port_name = "MIDI Mixer Control"
+        self.virtual_port_name = "Dconpro"
         self.virtual_port_active = False
         
         # Thread-safe communication

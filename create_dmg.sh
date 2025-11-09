@@ -4,7 +4,7 @@
 set -e
 
 echo "======================================"
-echo "D-ConPro - DMG 생성"
+echo "Dconpro - DMG 생성"
 echo "======================================"
 echo ""
 
@@ -15,7 +15,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 # 앱 확인
-APP_BUNDLE="dist/D-ConPro.app"
+APP_BUNDLE="dist/Dconpro.app"
 
 if [ ! -d "$APP_BUNDLE" ]; then
     echo -e "${RED}✗ 앱을 먼저 빌드해주세요: ./build_app.sh${NC}"
@@ -24,8 +24,8 @@ fi
 
 # 버전 정보
 VERSION="1.0.1"
-DMG_NAME="D-ConPro-${VERSION}.dmg"
-VOL_NAME="D-ConPro"
+DMG_NAME="Dconpro-${VERSION}.dmg"
+VOL_NAME="Dconpro"
 
 echo -e "${YELLOW}[1/4] 임시 DMG 폴더 생성...${NC}"
 TEMP_DIR="temp_dmg"
@@ -33,8 +33,9 @@ rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 
 # 앱 복사 (심볼릭 링크/권한 포함)
-mkdir -p "$TEMP_DIR/D-ConPro.app"
-rsync -a "$APP_BUNDLE/" "$TEMP_DIR/D-ConPro.app/"
+APP_NAME="Dconpro.app"
+mkdir -p "$TEMP_DIR/$APP_NAME"
+rsync -a "$APP_BUNDLE/" "$TEMP_DIR/$APP_NAME/"
 echo -e "${GREEN}✓ 앱 복사 완료${NC}"
 
 echo -e "${YELLOW}[2/4] Applications 심볼릭 링크 생성...${NC}"
@@ -56,8 +57,8 @@ if command -v create-dmg &> /dev/null; then
         --window-pos 200 120 \
         --window-size 600 400 \
         --icon-size 100 \
-        --icon "D-ConPro.app" 175 120 \
-        --hide-extension "D-ConPro.app" \
+        --icon "$APP_NAME" 175 120 \
+        --hide-extension "$APP_NAME" \
         --app-drop-link 425 120 \
         "$DMG_NAME" \
         "$TEMP_DIR" || {
