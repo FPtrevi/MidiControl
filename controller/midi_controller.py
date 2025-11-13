@@ -397,8 +397,9 @@ class MidiController:
                 self.view.qu5_ip_var.set(qu5_ip)
             if isinstance(qu5_port, int) and 1 <= qu5_port <= 65535:
                 self.view.qu5_port_var.set(str(qu5_port))
+            # qu5_channel을 midi_channel_var에 설정 (GUI에서 qu5_channel_var 제거됨)
             if isinstance(qu5_channel, int) and 1 <= qu5_channel <= 16:
-                self.view.qu5_channel_var.set(str(qu5_channel))
+                self.view.midi_channel_var.set(str(qu5_channel))
             if isinstance(use_tcp_midi, bool):
                 self.view.use_tcp_midi_var.set(use_tcp_midi)
             

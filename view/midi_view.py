@@ -115,16 +115,11 @@ class MidiMixerView:
         # Qu-5 settings (initially hidden)
         self.qu5_frame = ttk.Frame(self.connection_frame)
         
-        ttk.Label(self.qu5_frame, text="Qu-5 IP:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        ttk.Label(self.qu5_frame, text="IP Address:").grid(row=0, column=0, sticky="w", padx=(0, 5))
         ttk.Entry(self.qu5_frame, textvariable=self.qu5_ip_var, width=15).grid(row=0, column=1, padx=(0, 10))
         
         ttk.Label(self.qu5_frame, text="포트:").grid(row=0, column=2, sticky="w", padx=(0, 5))
-        ttk.Entry(self.qu5_frame, textvariable=self.qu5_port_var, width=10).grid(row=0, column=3, padx=(0, 10))
-        
-        ttk.Label(self.qu5_frame, text="MIDI 채널:").grid(row=0, column=4, sticky="w", padx=(0, 5))
-        ttk.Entry(self.qu5_frame, textvariable=self.qu5_channel_var, width=5).grid(row=0, column=5, padx=(0, 10))
-        
-        ttk.Checkbutton(self.qu5_frame, text="TCP/IP MIDI", variable=self.use_tcp_midi_var).grid(row=0, column=6)
+        ttk.Entry(self.qu5_frame, textvariable=self.qu5_port_var, width=10).grid(row=0, column=3)
         
         # MIDI Channel settings
         self.midi_channel_frame = ttk.LabelFrame(main_container, text="MIDI 채널 설정", padding="5")
@@ -224,7 +219,7 @@ class MidiMixerView:
             try:
                 ip = self.qu5_ip_var.get().strip()
                 port = int(self.qu5_port_var.get().strip())
-                channel = int(self.qu5_channel_var.get().strip())
+                channel = int(self.midi_channel_var.get().strip())
                 if not ip or port <= 0 or port > 65535 or channel < 1 or channel > 16:
                     raise ValueError()
             except (ValueError, AttributeError):
@@ -403,7 +398,7 @@ class MidiMixerView:
             return {
                 "qu5_ip": self.qu5_ip_var.get(),
                 "qu5_port": int(self.qu5_port_var.get()),
-                "qu5_channel": int(self.qu5_channel_var.get()),
+                "qu5_channel": int(self.midi_channel_var.get()),
                 "use_tcp_midi": self.use_tcp_midi_var.get()
             }
         
