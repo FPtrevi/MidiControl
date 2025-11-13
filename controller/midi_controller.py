@@ -11,6 +11,7 @@ import mido
 from model.midi_backend import MidiBackend
 from model.dm3_osc_service import DM3OSCService
 from model.qu5_midi_service import Qu5MIDIService
+from model.sq5_midi_service import Sq5MIDIService
 from view.midi_view import MidiMixerView
 from config.settings import NOTE_ON_TYPE, NOTE_OFF_TYPE, PORT_WATCH_INTERVAL_SEC
 from utils.logger import get_logger
@@ -37,6 +38,7 @@ class MidiController:
         # Services (initialized after mixer selection)
         self.dm3_service: Optional[DM3OSCService] = None
         self.qu5_service: Optional[Qu5MIDIService] = None
+        self.sq5_service: Optional[Sq5MIDIService] = None
         
         # Connection state
         self.is_monitoring = False
@@ -82,7 +84,7 @@ class MidiController:
                 mixer = params["mixer"]
                 
                 # Initialize services if not done
-                if not self.dm3_service or not self.qu5_service:
+                if not self.dm3_service or not self.qu5_service or not self.sq5_service:
                     self._initialize_services(mixer)
                 
                 # Connect to appropriate mixer
@@ -95,6 +97,9 @@ class MidiController:
                 elif mixer == "Qu-5/6/7":
                     if self.qu5_service:
                         connection_success = self.qu5_service.connect()
+                elif mixer == "SQ-5/6/7":
+                    if self.sq5_service:
+                        connection_success = self.sq5_service.connect()
                 
                 if not connection_success:
                     self.view.show_message("연결 오류", f"{mixer} 믹서 연결에 실패했습니다.", "error")
@@ -127,6 +132,8 @@ class MidiController:
                     self.dm3_service.disconnect()
                 if self.qu5_service:
                     self.qu5_service.disconnect()
+                if self.sq5_service:
+                    self.sq5_service.disconnect()
                 
                 self.midi_backend.stop_monitoring()
                 self.is_monitoring = False
@@ -160,6 +167,8 @@ class MidiController:
                 self.dm3_service.update_mixer_config(mixer_name)
             if self.qu5_service:
                 self.qu5_service.update_mixer_config(mixer_name)
+            if self.sq5_service:
+                self.sq5_service.update_mixer_config(mixer_name)
                 
         except Exception as e:
             self.logger.error(f"믹서 변경 오류: {e}")
@@ -192,6 +201,19 @@ class MidiController:
                         mixer_params.get("qu5_channel", 1),
                         mixer_params.get("use_tcp_midi", True)
                     )
+            elif mixer_name == "SQ-5/6/7":
+                self.sq5_service = Sq5MIDIService(mixer_name, self.midi_backend)
+                # Set GUI callback for service logger
+                self.sq5_service.logger.set_gui_callback(self.view.append_log)
+                # Set SQ-5 connection parameters from view
+                mixer_params = self.view.get_mixer_connection_params()
+                if mixer_params:
+                    self.sq5_service.set_connection_params(
+                        mixer_params.get("sq5_ip", "192.168.5.10"),
+                        mixer_params.get("sq5_port", 51325),
+                        mixer_params.get("sq5_channel", 1),
+                        mixer_params.get("use_tcp_midi", True)
+                    )
             
             self.logger.info(f"서비스 초기화 완료: {mixer_name}")
             
@@ -217,10 +239,12 @@ class MidiController:
             # Route message based on channel and mixer type
             # Channel 0 = Soft key control, Channel 1 = Scene recall, Channel 2 = Mute control
             if message.channel == 0:
-                # Soft key control (for Qu-5/6/7)
+                # Soft key control (for Qu-5/6/7 and SQ-5/6/7)
                 if message.type == NOTE_ON_TYPE and message.velocity > 0:
                     if mixer == "Qu-5/6/7" and self.qu5_service:
                         self.qu5_service.handle_softkey(message.note, message.channel, mixer_midi_channel)
+                    elif mixer == "SQ-5/6/7" and self.sq5_service:
+                        self.sq5_service.handle_softkey(message.note, message.channel, mixer_midi_channel)
                         
             elif message.channel == 1:
                 # Scene recall
@@ -229,6 +253,8 @@ class MidiController:
                         self.dm3_service.handle_scene(message.note, message.channel)
                     elif mixer == "Qu-5/6/7" and self.qu5_service:
                         self.qu5_service.handle_scene(message.note, message.channel, mixer_midi_channel)
+                    elif mixer == "SQ-5/6/7" and self.sq5_service:
+                        self.sq5_service.handle_scene(message.note, message.channel, mixer_midi_channel)
                         
             elif message.channel == 2:
                 # Mute control
@@ -237,6 +263,8 @@ class MidiController:
                     self.dm3_service.handle_mute(message.note, effective_velocity, message.channel)
                 elif mixer == "Qu-5/6/7" and self.qu5_service:
                     self.qu5_service.handle_mute(message.note, effective_velocity, message.channel, mixer_midi_channel)
+                elif mixer == "SQ-5/6/7" and self.sq5_service:
+                    self.sq5_service.handle_mute(message.note, effective_velocity, message.channel, mixer_midi_channel)
                         
             else:
                 self.view.append_log(f"ℹ️ 처리하지 않는 채널: {message.channel} (채널 0,1,2만 처리)")
@@ -274,7 +302,7 @@ class MidiController:
                 # 1) View 초기화 시점에서 이미 설정이 로드되므로 믹서 변경 콜백만 호출
                 # 믹서 타입이 로드된 경우 해당 믹서로 서비스 초기화
                 mixer = self.view.mixer_var.get()
-                if mixer in ["DM3", "Qu-5/6/7"]:
+                if mixer in ["DM3", "Qu-5/6/7", "SQ-5/6/7"]:
                     self.view.root.after(100, lambda: self._on_mixer_changed(mixer))
 
                 # Initial port refresh must run on Tk main loop to avoid GIL issues
@@ -317,6 +345,8 @@ class MidiController:
                     self.dm3_service.shutdown()
                 if self.qu5_service:
                     self.qu5_service.shutdown()
+                if self.sq5_service:
+                    self.sq5_service.shutdown()
                 
                 self.midi_backend.shutdown()
                 self.view.quit()
@@ -367,7 +397,7 @@ class MidiController:
             
             # 믹서 타입 로드 및 적용
             mixer = prefs.get("mixer")
-            if isinstance(mixer, str) and mixer in ["DM3", "Qu-5/6/7"]:
+            if isinstance(mixer, str) and mixer in ["DM3", "Qu-5/6/7", "SQ-5/6/7"]:
                 self.view.mixer_var.set(mixer)
                 # 믹서 변경 콜백 호출하여 내부 서비스 구성을 업데이트
                 self._on_mixer_changed(mixer)
@@ -403,6 +433,19 @@ class MidiController:
             if isinstance(use_tcp_midi, bool):
                 self.view.use_tcp_midi_var.set(use_tcp_midi)
             
+            # SQ-5/6/7 설정 로드 및 적용
+            sq5_ip = prefs.get("sq5_ip")
+            sq5_port = prefs.get("sq5_port")
+            sq5_channel = prefs.get("sq5_channel")
+            
+            if isinstance(sq5_ip, str) and sq5_ip:
+                self.view.sq5_ip_var.set(sq5_ip)
+            if isinstance(sq5_port, int) and 1 <= sq5_port <= 65535:
+                self.view.sq5_port_var.set(str(sq5_port))
+            # sq5_channel을 midi_channel_var에 설정 (GUI에서 sq5_channel_var 제거됨)
+            if isinstance(sq5_channel, int) and 1 <= sq5_channel <= 16:
+                self.view.midi_channel_var.set(str(sq5_channel))
+            
             self.logger.info("사용자 설정 로드 완료")
             
         except Exception as e:
@@ -434,6 +477,13 @@ class MidiController:
                     "qu5_ip": mixer_params.get("qu5_ip", "192.168.5.10"),
                     "qu5_port": mixer_params.get("qu5_port", 51325),
                     "qu5_channel": mixer_params.get("qu5_channel", 1),
+                    "use_tcp_midi": mixer_params.get("use_tcp_midi", True)
+                })
+            elif mixer == "SQ-5/6/7":
+                prefs.update({
+                    "sq5_ip": mixer_params.get("sq5_ip", "192.168.5.10"),
+                    "sq5_port": mixer_params.get("sq5_port", 51325),
+                    "sq5_channel": mixer_params.get("sq5_channel", 1),
                     "use_tcp_midi": mixer_params.get("use_tcp_midi", True)
                 })
             

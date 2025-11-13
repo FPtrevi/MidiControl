@@ -35,6 +35,9 @@ DEFAULT_DM3_PORT: int = 49900
 DEFAULT_QU5_IP: str = "192.168.5.10"
 DEFAULT_QU5_PORT: int = 51325
 DEFAULT_QU5_CHANNEL: int = 1
+DEFAULT_SQ5_IP: str = "192.168.5.10"
+DEFAULT_SQ5_PORT: int = 51325
+DEFAULT_SQ5_CHANNEL: int = 1
 
 # Performance Settings
 MAX_MIDI_MESSAGES_PER_UPDATE: int = 100
@@ -42,7 +45,7 @@ GUI_UPDATE_INTERVAL_MS: int = 10
 PING_CACHE_INTERVAL_SEC: float = 3.0
 
 # Validation Settings
-VALID_MIXER_TYPES: Tuple[str, ...] = ("DM3", "Qu-5/6/7")
+VALID_MIXER_TYPES: Tuple[str, ...] = ("DM3", "Qu-5/6/7", "SQ-5/6/7")
 VALID_LOG_LEVELS: Tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 def get_config() -> Dict[str, Any]:
@@ -73,6 +76,9 @@ def get_config() -> Dict[str, Any]:
             "qu5_ip": DEFAULT_QU5_IP,
             "qu5_port": DEFAULT_QU5_PORT,
             "qu5_channel": DEFAULT_QU5_CHANNEL,
+            "sq5_ip": DEFAULT_SQ5_IP,
+            "sq5_port": DEFAULT_SQ5_PORT,
+            "sq5_channel": DEFAULT_SQ5_CHANNEL,
         },
         "performance": {
             "max_midi_messages": MAX_MIDI_MESSAGES_PER_UPDATE,
@@ -106,6 +112,12 @@ def validate_config() -> bool:
             return False
         
         if not (1 <= DEFAULT_QU5_CHANNEL <= 16):
+            return False
+        
+        if not (1 <= DEFAULT_SQ5_PORT <= 65535):
+            return False
+        
+        if not (1 <= DEFAULT_SQ5_CHANNEL <= 16):
             return False
         
         return True

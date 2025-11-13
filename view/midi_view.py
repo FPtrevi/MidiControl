@@ -10,7 +10,7 @@ import threading
 from config.settings import (
     WINDOW_TITLE, WINDOW_SIZE, WINDOW_RESIZABLE, 
     DEFAULT_MIDI_CHANNEL, MIDI_CHANNEL_RANGE,
-    DEFAULT_DM3_IP, DEFAULT_DM3_PORT, DEFAULT_QU5_IP, DEFAULT_QU5_PORT
+    DEFAULT_DM3_IP, DEFAULT_DM3_PORT, DEFAULT_QU5_IP, DEFAULT_QU5_PORT, DEFAULT_SQ5_IP, DEFAULT_SQ5_PORT
 )
 # Removed mixer_config dependency - we'll define mixers directly
 from utils.logger import get_logger
@@ -55,6 +55,9 @@ class MidiMixerView:
         self.qu5_ip_var = tk.StringVar(value=prefs.get("qu5_ip", DEFAULT_QU5_IP))
         self.qu5_port_var = tk.StringVar(value=str(prefs.get("qu5_port", DEFAULT_QU5_PORT)))
         self.qu5_channel_var = tk.StringVar(value=str(prefs.get("qu5_channel", 1)))
+        self.sq5_ip_var = tk.StringVar(value=prefs.get("sq5_ip", DEFAULT_SQ5_IP))
+        self.sq5_port_var = tk.StringVar(value=str(prefs.get("sq5_port", DEFAULT_SQ5_PORT)))
+        self.sq5_channel_var = tk.StringVar(value=str(prefs.get("sq5_channel", 1)))
         self.use_tcp_midi_var = tk.BooleanVar(value=prefs.get("use_tcp_midi", True))
         
         # Connection state
@@ -86,10 +89,10 @@ class MidiMixerView:
         mixer_frame.pack(fill="x", pady=(0, 10))
         
         self.mixer_dropdown = ttk.Combobox(mixer_frame, textvariable=self.mixer_var, state="readonly")
-        self.mixer_dropdown['values'] = ["DM3", "Qu-5/6/7"]
+        self.mixer_dropdown['values'] = ["DM3", "Qu-5/6/7", "SQ-5/6/7"]
         
         # 저장된 믹서 타입에 따라 올바른 인덱스 선택
-        mixer_values = ["DM3", "Qu-5/6/7"]
+        mixer_values = ["DM3", "Qu-5/6/7", "SQ-5/6/7"]
         current_mixer = self.mixer_var.get()
         if current_mixer in mixer_values:
             self.mixer_dropdown.current(mixer_values.index(current_mixer))
@@ -120,6 +123,15 @@ class MidiMixerView:
         
         ttk.Label(self.qu5_frame, text="포트:").grid(row=0, column=2, sticky="w", padx=(0, 5))
         ttk.Entry(self.qu5_frame, textvariable=self.qu5_port_var, width=10).grid(row=0, column=3)
+        
+        # SQ-5 settings (initially hidden)
+        self.sq5_frame = ttk.Frame(self.connection_frame)
+        
+        ttk.Label(self.sq5_frame, text="IP Address:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        ttk.Entry(self.sq5_frame, textvariable=self.sq5_ip_var, width=15).grid(row=0, column=1, padx=(0, 10))
+        
+        ttk.Label(self.sq5_frame, text="포트:").grid(row=0, column=2, sticky="w", padx=(0, 5))
+        ttk.Entry(self.sq5_frame, textvariable=self.sq5_port_var, width=10).grid(row=0, column=3)
         
         # MIDI Channel settings
         self.midi_channel_frame = ttk.LabelFrame(main_container, text="MIDI 채널 설정", padding="5")
@@ -163,12 +175,20 @@ class MidiMixerView:
         if mixer == "DM3":
             self.dm3_frame.pack(fill="x")
             self.qu5_frame.pack_forget()
+            self.sq5_frame.pack_forget()
             # DM3는 OSC를 사용하므로 MIDI 채널 설정 비활성화
             self._set_midi_channel_frame_state("disabled")
         elif mixer == "Qu-5/6/7":
             self.qu5_frame.pack(fill="x")
             self.dm3_frame.pack_forget()
+            self.sq5_frame.pack_forget()
             # Qu-5/6/7는 MIDI를 사용하므로 MIDI 채널 설정 활성화
+            self._set_midi_channel_frame_state("normal")
+        elif mixer == "SQ-5/6/7":
+            self.sq5_frame.pack(fill="x")
+            self.dm3_frame.pack_forget()
+            self.qu5_frame.pack_forget()
+            # SQ-5/6/7는 MIDI를 사용하므로 MIDI 채널 설정 활성화
             self._set_midi_channel_frame_state("normal")
         
         if self.on_mixer_changed_callback:
@@ -224,6 +244,18 @@ class MidiMixerView:
                     raise ValueError()
             except (ValueError, AttributeError):
                 messagebox.showerror("입력 오류", "Qu-5/6/7 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
+                return False
+        
+        elif mixer == "SQ-5/6/7":
+            # Validate SQ-5/6/7 connection parameters
+            try:
+                ip = self.sq5_ip_var.get().strip()
+                port = int(self.sq5_port_var.get().strip())
+                channel = int(self.midi_channel_var.get().strip())
+                if not ip or port <= 0 or port > 65535 or channel < 1 or channel > 16:
+                    raise ValueError()
+            except (ValueError, AttributeError):
+                messagebox.showerror("입력 오류", "SQ-5/6/7 IP 주소, 포트, MIDI 채널을 올바르게 입력해주세요.")
                 return False
         
         return True
@@ -326,7 +358,7 @@ class MidiMixerView:
             mixer = self.mixer_var.get()
             if mixer == "DM3":
                 self._set_midi_channel_frame_state("disabled")
-            else:  # Qu-5/6/7
+            else:  # Qu-5/6/7 or SQ-5/6/7
                 self._set_midi_channel_frame_state("normal")
     
     def clear_log(self) -> None:
@@ -399,6 +431,13 @@ class MidiMixerView:
                 "qu5_ip": self.qu5_ip_var.get(),
                 "qu5_port": int(self.qu5_port_var.get()),
                 "qu5_channel": int(self.midi_channel_var.get()),
+                "use_tcp_midi": self.use_tcp_midi_var.get()
+            }
+        elif mixer == "SQ-5/6/7":
+            return {
+                "sq5_ip": self.sq5_ip_var.get(),
+                "sq5_port": int(self.sq5_port_var.get()),
+                "sq5_channel": int(self.midi_channel_var.get()),
                 "use_tcp_midi": self.use_tcp_midi_var.get()
             }
         
