@@ -4,7 +4,7 @@
 set -e  # 에러 발생 시 중단
 
 echo "======================================"
-echo "Dconpro - macOS 앱 빌드"
+echo "Dcon Mix - macOS 앱 빌드"
 echo "======================================"
 echo ""
 
@@ -46,7 +46,7 @@ echo -e "${GREEN}✓ 정리 완료${NC}"
 echo -e "${YELLOW}[5/7] 앱 빌드 중...${NC}"
 python3 setup.py py2app --optimize=2
 
-APP_BUNDLE="dist/Dconpro.app"
+APP_BUNDLE="dist/Dcon Mix.app"
 
 if [ ! -d "$APP_BUNDLE" ]; then
     echo -e "${RED}✗ 빌드 실패!${NC}"
@@ -56,7 +56,7 @@ echo -e "${GREEN}✓ 빌드 완료${NC}"
 
 # 5.5. 앱 권한 설정
 echo -e "${YELLOW}[5.5/7] 앱 권한 설정...${NC}"
-chmod +x "$APP_BUNDLE/Contents/MacOS/Dconpro"
+chmod +x "$APP_BUNDLE/Contents/MacOS/Dcon Mix"
 chmod +x "$APP_BUNDLE/Contents/MacOS/python"
 echo -e "${GREEN}✓ 권한 설정 완료${NC}"
 

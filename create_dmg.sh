@@ -4,7 +4,7 @@
 set -e
 
 echo "======================================"
-echo "Dconpro - DMG 생성"
+echo "Dcon Mix - DMG 생성"
 echo "======================================"
 echo ""
 
@@ -15,7 +15,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 # 앱 확인
-APP_BUNDLE="dist/Dconpro.app"
+APP_BUNDLE="dist/Dcon Mix.app"
 
 if [ ! -d "$APP_BUNDLE" ]; then
     echo -e "${RED}✗ 앱을 먼저 빌드해주세요: ./build_app.sh${NC}"
@@ -24,8 +24,8 @@ fi
 
 # 버전 정보
 VERSION="1.0.1"
-DMG_NAME="Dconpro-${VERSION}.dmg"
-VOL_NAME="Dconpro"
+DMG_NAME="Dcon-Mix-${VERSION}.dmg"
+VOL_NAME="Dcon Mix"
 
 echo -e "${YELLOW}[1/4] 임시 DMG 폴더 생성...${NC}"
 TEMP_DIR="temp_dmg"
@@ -33,7 +33,7 @@ rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 
 # 앱 복사 (심볼릭 링크/권한 포함)
-APP_NAME="Dconpro.app"
+APP_NAME="Dcon Mix.app"
 mkdir -p "$TEMP_DIR/$APP_NAME"
 rsync -a "$APP_BUNDLE/" "$TEMP_DIR/$APP_NAME/"
 echo -e "${GREEN}✓ 앱 복사 완료${NC}"
