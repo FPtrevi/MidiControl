@@ -47,13 +47,13 @@ class Qu5MIDIService(BaseMidiService):
         self.qu5_port = port
         self.qu5_midi_channel = channel
         self.use_tcp_midi = use_tcp
-        self.logger.info(f"Qu-5 연결 설정: {ip}:{port}, 채널:{channel}, TCP/IP:{use_tcp}")
+        self.logger.info(f"Qu-5/6/7 연결 설정: {ip}:{port}, 채널:{channel}, TCP/IP:{use_tcp}")
     
     def connect(self) -> bool:
         """Connect to Qu-5 mixer."""
         with self._connection_lock:
             if self.qu5_connected:
-                self.logger.info("Qu-5가 이미 연결되어 있습니다")
+                self.logger.info("Qu-5/6/7가 이미 연결되어 있습니다")
                 return True
                 
             try:
@@ -62,13 +62,13 @@ class Qu5MIDIService(BaseMidiService):
                 else:
                     return self._connect_usb_midi()
             except Exception as e:
-                self.logger.error(f"❌ Qu-5 연결 실패: {e}")
+                self.logger.error(f"❌ Qu-5/6/7 연결 실패: {e}")
                 return False
     
     def _connect_tcp_midi(self) -> bool:
         """Connect to Qu-5 via TCP/IP MIDI."""
         try:
-            self.logger.info(f"🔍 Qu-5 TCP/IP MIDI 연결 시도: {self.qu5_ip}:{self.qu5_port}")
+            self.logger.info(f"🔍 Qu-5/6/7 TCP/IP MIDI 연결 시도: {self.qu5_ip}:{self.qu5_port}")
             
             # 1. Network connectivity test
             if not self.ping_host(self.qu5_ip):
@@ -89,7 +89,7 @@ class Qu5MIDIService(BaseMidiService):
             self.qu5_socket.connect((self.qu5_ip, self.qu5_port))
             
             self.qu5_connected = True
-            self.logger.info(f"🎉 Qu-5 TCP/IP MIDI 연결 성공: {self.qu5_ip}:{self.qu5_port}")
+            self.logger.info(f"🎉 Qu-5/6/7 TCP/IP MIDI 연결 성공: {self.qu5_ip}:{self.qu5_port}")
             return True
             
         except Exception as e:
@@ -102,12 +102,12 @@ class Qu5MIDIService(BaseMidiService):
     def _connect_usb_midi(self) -> bool:
         """Connect to Qu-5 via USB MIDI (placeholder - would need mido output port)."""
         try:
-            self.logger.info("🔍 Qu-5 USB MIDI 연결 시도...")
+            self.logger.info("🔍 Qu-5/6/7 USB MIDI 연결 시도...")
             
             # USB MIDI connection would require finding the Qu-5 USB MIDI port
             # For now, we'll simulate success but this would need actual implementation
             self.qu5_connected = True
-            self.logger.info("🎉 Qu-5 USB MIDI 연결 성공 (시뮬레이션)")
+            self.logger.info("🎉 Qu-5/6/7 USB MIDI 연결 성공 (시뮬레이션)")
             return True
             
         except Exception as e:
@@ -125,7 +125,7 @@ class Qu5MIDIService(BaseMidiService):
                 self.qu5_socket = None
             
             self.qu5_connected = False
-            self.logger.info("Qu-5 믹서 연결 해제됨")
+            self.logger.info("Qu-5/6/7 믹서 연결 해제됨")
     
     def ping_host(self, ip: str) -> bool:
         """Test host connectivity with ping (with caching)."""
@@ -157,7 +157,7 @@ class Qu5MIDIService(BaseMidiService):
         """Send MIDI message to Qu-5."""
         with self._connection_lock:
             if not self.qu5_connected:
-                self.logger.warning("⚠️ Qu-5에 연결되지 않음")
+                self.logger.warning("⚠️ Qu-5/6/7에 연결되지 않음")
                 return False
             
             try:
@@ -180,7 +180,7 @@ class Qu5MIDIService(BaseMidiService):
                     return True
                     
             except Exception as e:
-                self.logger.error(f"❌ Qu-5 MIDI 전송 실패: {e}")
+                self.logger.error(f"❌ Qu-5/6/7 MIDI 전송 실패: {e}")
                 # Mark as disconnected on send failure
                 self.qu5_connected = False
                 return False
@@ -202,7 +202,7 @@ class Qu5MIDIService(BaseMidiService):
         channel_num = note + 1  # Convert to 1-based channel number
         mute_on_off = 1 if velocity >= 1 else 0
         
-        self.logger.info(f"🔇 Qu-5 뮤트 제어: 채널 {channel_num}, 뮤트: {mute_on_off}, MIDI 채널: {midi_channel}")
+        self.logger.info(f"🔇 Qu-5/6/7 뮤트 제어: 채널 {channel_num}, 뮤트: {mute_on_off}, MIDI 채널: {midi_channel}")
         self.send_nrpn_mute_sequence(channel_num, mute_on_off, midi_channel)
     
     def handle_scene(self, note: int, channel: int, mixer_midi_channel: int = None) -> None:
@@ -220,7 +220,7 @@ class Qu5MIDIService(BaseMidiService):
             
         # Note 0 -> Scene 1, Note 1 -> Scene 2 ... (+1 offset required by mixer)
         scene_number = note + 1
-        self.logger.info(f"🎬 Qu-5 씬 리콜: {scene_number}번 씬, MIDI 채널: {midi_channel}")
+        self.logger.info(f"🎬 Qu-5/6/7 씬 리콜: {scene_number}번 씬, MIDI 채널: {midi_channel}")
         self.recall_scene_by_number(scene_number, midi_channel)
     
     def handle_softkey(self, note: int, channel: int, mixer_midi_channel: int = None) -> None:
@@ -238,7 +238,7 @@ class Qu5MIDIService(BaseMidiService):
             
         # Note 0-7 directly corresponds to soft key 0-7 (0-based)
         softkey_number = note  # Keep as 0-based for Qu-5
-        self.logger.info(f"🔘 Qu-5 소프트키 제어: {softkey_number}번 소프트키 (0-based), MIDI 채널: {midi_channel}")
+        self.logger.info(f"🔘 Qu-5/6/7 소프트키 제어: {softkey_number}번 소프트키 (0-based), MIDI 채널: {midi_channel}")
         self.send_softkey_command(softkey_number, midi_channel)
     
     def send_nrpn_mute_sequence(self, channel_num: int, mute_value: int, mixer_midi_channel: int = None) -> None:
@@ -273,10 +273,10 @@ class Qu5MIDIService(BaseMidiService):
                 time.sleep(0.01)
             
             action = "뮤트" if mute_value else "뮤트 해제"
-            self.logger.info(f"🔇 Qu-5 {channel_num}번 채널 {action} 완료")
+            self.logger.info(f"🔇 Qu-5/6/7 {channel_num}번 채널 {action} 완료")
             
         except Exception as e:
-            self.logger.error(f"❌ Qu-5 NRPN 뮤트 시퀀스 실패: {e}")
+            self.logger.error(f"❌ Qu-5/6/7 NRPN 뮤트 시퀀스 실패: {e}")
     
     def send_softkey_command(self, softkey_number: int, mixer_midi_channel: int = None) -> None:
         """Send soft key command to Qu-5 using Note On/Off (notes start at 0x30)."""
@@ -300,12 +300,12 @@ class Qu5MIDIService(BaseMidiService):
             ok_off = self.send_midi_message(note_off)
             
             if ok_on and ok_off:
-                self.logger.info(f"🔘 Qu-5 소프트키 트리거 완료: idx={softkey_number}, note=0x{midi_note:02X}")
+                self.logger.info(f"🔘 Qu-5/6/7 소프트키 트리거 완료: idx={softkey_number}, note=0x{midi_note:02X}")
             else:
-                self.logger.error("❌ Qu-5 소프트키 Note On/Off 전송 실패")
+                self.logger.error("❌ Qu-5/6/7 소프트키 Note On/Off 전송 실패")
             
         except Exception as e:
-            self.logger.error(f"❌ Qu-5 소프트키 명령 실패: {e}")
+            self.logger.error(f"❌ Qu-5/6/7 소프트키 명령 실패: {e}")
     
     def recall_scene_by_number(self, scene_number: int, mixer_midi_channel: int = None) -> None:
         """Recall scene by number on Qu-5 using Program Change only."""
@@ -320,19 +320,18 @@ class Qu5MIDIService(BaseMidiService):
             # Scene recall via Program Change: program is (scene_number - 1)
             program_msg = mido.Message('program_change', channel=midi_channel, program=max(0, scene_number - 1))
             if self.send_midi_message(program_msg):
-                self.logger.info(f"🎬 Qu-5 {scene_number}번 씬 리콜 완료 (PC={scene_number - 1})")
+                self.logger.info(f"🎬 Qu-5/6/7 {scene_number}번 씬 리콜 완료 (PC={scene_number - 1})")
             else:
                 self.logger.error("❌ Program Change 전송 실패")
             
         except Exception as e:
-            self.logger.error(f"❌ Qu-5 씬 리콜 실패: {e}")
+            self.logger.error(f"❌ Qu-5/6/7 씬 리콜 실패: {e}")
     
     def update_mixer_config(self, mixer_name: str) -> None:
         """Update mixer configuration (Qu-5 specific)."""
         self.mixer_name = mixer_name
-        self.logger.info(f"Qu-5 믹서 설정 업데이트: {mixer_name}")
     
     def shutdown(self) -> None:
         """Shutdown the service."""
         self.disconnect()
-        self.logger.info("Qu-5 MIDI 서비스 종료")
+        self.logger.info("Qu-5/6/7 MIDI 서비스 종료")
