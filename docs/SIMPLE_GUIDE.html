@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dcon Mix 간단 사용 가이드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .section {
+            margin-bottom: 50px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .section h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin: 30px 0 15px 0;
+        }
+        
+        .image-container {
+            margin: 30px 0;
+            text-align: center;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .image-container p {
+            margin-top: 15px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info-box h4 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+        
+        .step-list {
+            list-style: none;
+            counter-reset: step-counter;
+        }
+        
+        .step-list li {
+            counter-increment: step-counter;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            position: relative;
+            padding-left: 60px;
+        }
+        
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .feature-card h4 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+        
+        footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .version {
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        
+        .number-label {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            margin: 20px 0;
+        }
+        
+        .feature-list li {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .image-description {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 5px;
+        }
+        
+        .image-description h4 {
+            color: #856404;
+            margin-bottom: 8px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        table tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎛️ Dcon Mix</h1>
+            <p>ProPresenter와 오디오 믹서를 연결하는 간편한 솔루션</p>
+        </header>
+        
+        <div class="content">
+            <!-- 앱 소개 -->
+            <section class="section">
+                <h2>📱 앱 소개</h2>
+                <div class="image-container">
+                    <img src="img/Main.png" alt="앱 설명">
+                    <p>Dcon Mix 앱 개요</p>
+                </div>
+                
+                <div class="info-box">
+                    <h4>Dcon Mix란?</h4>
+                    <p>Dcon Mix는 ProPresenter에서 보내는 MIDI 신호를 받아서 DM3, Qu-5/6/7, SQ-5/6/7 오디오 믹서를 제어하는 macOS 애플리케이션입니다. 
+                    프레젠테이션 소프트웨어와 오디오 믹서를 자동으로 연동하여 씬 변경, 채널 뮤트, 소프트키 제어 등을 자동화할 수 있습니다.</p>
+                </div>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🎬 씬 리콜</h4>
+                        <p>ProPresenter 씬 변경 시 믹서 씬 자동 전환</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔇 뮤트 제어</h4>
+                        <p>슬라이드별 채널 뮤트 자동 제어</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔘 소프트키</h4>
+                        <p>ProPresenter에서 믹서 소프트키 트리거</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 메인 화면 -->
+            <section class="section">
+                <h2>🖥️ 메인 화면</h2>
+                <div class="image-container">
+                    <img src="img/App 설명.png" alt="메인 화면">
+                    <p>Dcon Mix 메인 인터페이스</p>
+                </div>
+                
+                <div class="info-box">
+                    <h4>메인 화면 기능 설명</h4>
+                    <ul class="feature-list">
+                        <li>
+                            <span class="number-label">1</span>
+                            <strong>믹서 선택:</strong> 드롭다운 메뉴에서 사용할 믹서를 선택합니다. (DM3, Qu-5/6/7, SQ-5/6/7)
+                        </li>
+                        <li>
+                            <span class="number-label">2</span>
+                            <strong>IP 주소 입력:</strong> 믹서의 네트워크 IP 주소를 입력합니다. (예: 192.168.4.2, 192.168.5.10)
+                        </li>
+                        <li>
+                            <span class="number-label">3</span>
+                            <strong>포트 번호 입력:</strong> 통신에 사용할 포트 번호를 입력합니다. (DM3: 49900, Qu/SQ: 51325)
+                        </li>
+                        <li>
+                            <span class="number-label">4</span>
+                            <strong>MIDI 채널 설정:</strong> Qu-5/6/7, SQ-5/6/7 믹서의 경우 MIDI 채널을 설정합니다. (1-16, DM3는 사용 안 함)
+                        </li>
+                        <li>
+                            <span class="number-label">5</span>
+                            <strong>연결 버튼:</strong> 설정한 정보로 믹서에 연결합니다. 연결 성공 시 "연결 해제"로 변경됩니다.
+                        </li>
+                        <li>
+                            <span class="number-label">6</span>
+                            <strong>로그 영역:</strong> 연결 상태, MIDI 메시지 수신, 오류 메시지 등이 실시간으로 표시됩니다.
+                        </li>
+                    </ul>
+                </div>
+            </section>
+            
+            <!-- ProPresenter 설정 -->
+            <section class="section">
+                <h2>🎯 ProPresenter 설정</h2>
+                
+                <h3>1단계: MIDI 장치 추가</h3>
+                <div class="image-container">
+                    <img src="img/프로프리젠터 설정 1.png" alt="ProPresenter 설정 1">
+                    <p>ProPresenter - MIDI 장치 추가</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>ProPresenter를 실행하고 <strong>설정(Settings)</strong> → <strong>기기(Device)</strong> 메뉴로 이동합니다.</p>
+                    </div>
+                </div>
+                
+                <h3>2단계: 출력 포트 선택</h3>
+                <div class="image-container">
+                    <img src="img/프로프리젠터 설정 2.png" alt="ProPresenter 설정 2">
+                    <p>ProPresenter - 출력 포트 설정</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>왼쪽 하단의 <strong>"+"</strong> 버튼을 클릭하여 새로운 MIDI 장치를 추가합니다.</p>
+                    </div>
+                </div>
+                
+                <h3>3단계: MIDI 메시지 설정</h3>
+                <div class="image-container">
+                    <img src="img/프로프리젠터 설정 3.png" alt="ProPresenter 설정 3">
+                    <p>ProPresenter - MIDI 메시지 설정</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>추가된 MIDI 장치의 <strong>출력 포트</strong> 드롭다운 메뉴에서 <strong>"Dcon Mix In"</strong>을 선택합니다. 
+                            포트가 보이지 않으면 Dcon Mix 앱이 실행 중인지 확인하세요.</p>
+                    </div>
+                </div>
+                
+                <h3>4단계: 설정 확인</h3>
+                <div class="image-container">
+                    <img src="img/프로프리젠터 설정 4.png" alt="ProPresenter 설정 4">
+                    <p>ProPresenter - 최종 설정 확인</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>설정이 완료되면 MIDI 장치 목록에 추가된 장치가 표시됩니다. 
+                        Dcon Mix 앱에서 믹서에 연결한 후 ProPresenter에서 슬라이드를 실행하여 테스트합니다.</p>
+                    </div>
+                </div>
+                
+                <div class="info-box">
+                    <h4>ProPresenter 연동 단계</h4>
+                    <ol class="step-list">
+                        <li>ProPresenter를 실행하고 <strong>설정(Settings)</strong> → <strong>기기(Device)</strong> 메뉴로 이동합니다.</li>
+                        <li>왼쪽 하단의 <strong>"+"</strong> 버튼을 눌러 MIDI 장치를 생성합니다.</li>
+                        <li><strong>출력 포트</strong>에서 <strong>"Dcon Mix In"</strong>을 선택합니다.</li>
+                        <li>Dcon Mix 앱에서 믹서에 연결한 후 테스트합니다.</li>
+                    </ol>
+                </div>
+            </section>
+            
+            <!-- 매크로 설정 -->
+            <section class="section">
+                <h2>⚙️ 매크로 설정</h2>
+                
+                <h3>1단계: 매크로 생성</h3>
+                <div class="image-container">
+                    <img src="img/매크로 설정 1.png" alt="매크로 설정 1">
+                    <p>매크로 설정 화면 - 매크로 생성</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>ProPresenter에서 <strong>"매크로"</strong> 탭으로 이동합니다. 
+                        왼쪽 하단의 <strong>"+"</strong> 버튼을 클릭하여 새로운 매크로를 생성합니다.</p>
+                    </div>
+                </div>
+                
+                <h3>2단계: MIDI 작업 추가</h3>
+                <div class="image-container">
+                    <img src="img/매크로 설정 2.png" alt="매크로 설정 2">
+                    <p>매크로 설정 화면 - MIDI 작업 추가</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>생성된 매크로를 마우스 <strong>우클릭</strong>하여 컨텍스트 메뉴를 엽니다. 
+                        <strong>[작업 추가 → 커뮤니케이션 → (ProPresenter 설정에서 생성한 MIDI 기기 이름) → MIDI 노트 켬]</strong>을 선택합니다.</p>
+                    </div>
+                </div>
+                
+                <h3>3단계: MIDI 메시지 설정</h3>
+                <div class="image-container">
+                    <img src="img/매크로 설정 3.png" alt="매크로 설정 3">
+                    <p>매크로 설정 화면 - MIDI 메시지 설정</p>
+                    <div class="image-description">
+                        <h4>설명</h4>
+                        <p>MIDI 노트 켬 작업을 추가하면 설정 창이 열립니다. 이 창에서 <strong>채널(Channel)</strong>, 
+                        <strong>타입(Type)</strong>, <strong>Note</strong>, <strong>Velocity</strong> 값을 설정합니다. 
+                        사용하려는 기능에 따라 값이 달라집니다.</p>
+                    </div>
+                </div>
+                
+                <div class="info-box">
+                    <h4>매크로 사용법 가이드</h4>
+                    <p style="margin-bottom: 20px;">매크로 설정 시 사용하는 각 항목의 의미와 설정 방법을 아래 표에서 확인하세요.</p>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>항목</th>
+                                <th>설명</th>
+                                <th>설정 범위/값</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Channel<br>(채널)</strong></td>
+                                <td>MIDI 채널 번호로, 기능별로 다른 채널을 사용합니다.</td>
+                                <td>0, 1, 2</td>
+                                <td>
+                                    • 소프트키: 채널 0<br>
+                                    • 씬 리콜: 채널 1<br>
+                                    • 뮤트 제어: 채널 2
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Type<br>(타입)</strong></td>
+                                <td>MIDI 메시지의 종류를 선택합니다.</td>
+                                <td>Note On, Note Off</td>
+                                <td>
+                                    • 씬 리콜: Note On<br>
+                                    • 뮤트 On: Note On<br>
+                                    • 뮤트 Off: Note Off
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Note<br>(노트)</strong></td>
+                                <td>제어할 대상의 번호를 나타냅니다. 실제 값은 괄호 안의 번호에서 1을 더한 값입니다.</td>
+                                <td>0-99</td>
+                                <td>
+                                    • 씬 1 → Note 0<br>
+                                    • 씬 2 → Note 1<br>
+                                    • 채널 1 → Note 0<br>
+                                    • 소프트키 1 → Note 0
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Velocity<br>(벨로시티)</strong></td>
+                                <td>메시지의 강도나 상태를 나타냅니다.</td>
+                                <td>0-127</td>
+                                <td>
+                                    • 뮤트 On: 1<br>
+                                    • 뮤트 Off: 0<br>
+                                    • Note On: 1<br>
+                                    • Note Off: 0
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h4 style="margin-top: 30px; margin-bottom: 15px;">기능별 설정 예시</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>기능</th>
+                                <th>Channel</th>
+                                <th>Type</th>
+                                <th>Note 계산</th>
+                                <th>Velocity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>씬 리콜</strong></td>
+                                <td>1</td>
+                                <td>Note On</td>
+                                <td>씬 번호 - 1<br>(예: 씬 3 → Note 2)</td>
+                                <td>1</td>
+                            </tr>
+                            <tr>
+                                <td><strong>뮤트 On</strong></td>
+                                <td>2</td>
+                                <td>Note On</td>
+                                <td>채널 번호 - 1<br>(예: 채널 5 → Note 4)</td>
+                                <td>1</td>
+                            </tr>
+                            <tr>
+                                <td><strong>뮤트 Off</strong></td>
+                                <td>2</td>
+                                <td>Note Off</td>
+                                <td>채널 번호 - 1<br>(예: 채널 5 → Note 4)</td>
+                                <td>0</td>
+                            </tr>
+                            <tr>
+                                <td><strong>소프트키<br>(Qu/SQ만)</strong></td>
+                                <td>0</td>
+                                <td>Note On/Off</td>
+                                <td>소프트키 번호 - 1<br>(예: 소프트키 2 → Note 1)</td>
+                                <td>1</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <!-- 빠른 시작 -->
+            <section class="section">
+                <h2>🚀 빠른 시작</h2>
+                
+                <div class="info-box">
+                    <h4>5분 안에 시작하기</h4>
+                    <ol class="step-list">
+                        <li><strong>Dcon Mix 앱 실행</strong><br>
+                            앱을 실행하면 자동으로 가상 MIDI 포트 "Dcon Mix In"이 생성됩니다.</li>
+                        <li><strong>믹서 선택 및 연결</strong><br>
+                            메인 화면에서 사용할 믹서를 선택하고 IP 주소와 포트를 입력한 후 "믹서 연결" 버튼을 클릭합니다.</li>
+                        <li><strong>ProPresenter 설정</strong><br>
+                            ProPresenter의 설정 → 기기 메뉴에서 MIDI 장치를 추가하고 출력 포트를 "Dcon Mix In"으로 설정합니다.</li>
+                        <li><strong>MIDI 메시지 설정</strong><br>
+                            슬라이드나 액션의 MIDI 탭에서 원하는 기능(씬 리콜, 뮤트 제어 등)을 설정합니다.</li>
+                        <li><strong>테스트</strong><br>
+                            ProPresenter에서 슬라이드를 실행하여 믹서가 올바르게 반응하는지 확인합니다.</li>
+                    </ol>
+                </div>
+            </section>
+            
+            <!-- 지원 믹서 -->
+            <!-- <section class="section">
+                <h2>🎚️ 지원 믹서</h2>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>DM3</h4>
+                        <p>OSC 통신<br>기본 IP: 192.168.4.2<br>포트: 49900</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Qu-5/6/7</h4>
+                        <p>TCP/IP MIDI<br>기본 IP: 192.168.5.10<br>포트: 51325</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>SQ-5/6/7</h4>
+                        <p>TCP/IP MIDI<br>기본 IP: 192.168.5.10<br>포트: 51325</p>
+                    </div>
+                </div>
+            </section> -->
+        </div>
+        
+        <footer>
+            <p><strong>Dcon Mix v1.0.1</strong></p>
+            <p class="version">© 2025 | ProPresenter와 오디오 믹서를 연결하는 솔루션</p>
+        </footer>
+    </div>
+</body>
+</html>
